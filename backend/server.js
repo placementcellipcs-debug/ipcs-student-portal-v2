@@ -13,6 +13,7 @@ const allowedOrigins = [...new Set([
   ...(process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map((origin) => origin.trim()).filter(Boolean),
   ...(process.env.NATIVE_APP_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
   'http://localhost:3000',
+  'https://ipcs-student-portal-v2.vercel.app' // <-- Added your Vercel frontend URL
 ])];
 
 app.use(cors({
@@ -42,25 +43,17 @@ app.get('/', (req, res) => {
     res.status(200).json({ status: 'Active', message: 'Talenzo API is running.' });
 });
 
-// We will mount our modular routes here in the next step
-// app.use('/api/auth', authRoutes);
-// app.use('/api/dashboard', dashboardRoutes);
+// Import Routes
 const authRoutes = require('./routes/authRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes'); 
+const gamePalRoutes = require('./routes/gamePalRoutes');
+const careerHubRoutes = require('./routes/careerHubRoutes');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
-// app.use('/api/dashboard', dashboardRoutes); // We will uncomment this when we build the dashboard controller
-
-const dashboardRoutes = require('./routes/dashboardRoutes'); // <--- ADD THIS LINE
-
-app.use('/api/dashboard', dashboardRoutes); // <--- UNCOMMENT OR ADD THIS LINE
-
-const gamePalRoutes = require('./routes/gamePalRoutes');
+app.use('/api/dashboard', dashboardRoutes); 
 app.use('/api/gamepal', gamePalRoutes);
-
-const careerHubRoutes = require('./routes/careerHubRoutes');
 app.use('/api/career-hub', careerHubRoutes);
-
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

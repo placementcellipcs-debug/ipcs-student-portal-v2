@@ -126,6 +126,7 @@ export default function JobVacancies() {
   ));
   const requiresExperience = (vacancy) => /experienced|\d\s*\+?\s*years?|\d+\s*to\s*\d+\s*years?/i.test(String(vacancy.experience || ''));
   const studentIsFresher = /fresher|no experience|entry.level/i.test(String(user?.fresherStatus || ''));
+  const modalJobExpired = jobModal ? isEventExpired(jobModal.lastDate) : false;
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
@@ -234,7 +235,13 @@ export default function JobVacancies() {
                 </div>
               )}
 
-              {showConsent ? (
+              {modalJobExpired ? (
+                <div className="alert alert-warning vacancy-expired-notice">
+                  <i className="ph-fill ph-clock-countdown" aria-hidden="true"></i>
+                  <span>This opening has expired. Applications are closed, but you can still review its details.</span>
+                  <button type="button" className="btn-cancel" onClick={() => setJobModal(null)}>Close</button>
+                </div>
+              ) : showConsent ? (
                 <div style={{ background: 'var(--bg-dark)', padding: '20px', borderRadius: '16px', border: '1px solid var(--card-border)' }}>
                   {actionStatus && actionStatus.type === 'error' && actionStatus.message.includes('Resume') ? (
                     <div className="alert alert-error" style={{ margin: 0, padding: '1.5rem', textAlign: 'left', fontSize: '0.9rem', lineHeight: '1.5' }}>

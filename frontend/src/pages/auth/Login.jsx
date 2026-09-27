@@ -15,6 +15,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [fadeVideo, setFadeVideo] = useState(false);
@@ -70,6 +71,7 @@ export default function Login() {
         setStatus({ type: 'error', message: 'Please enter both email and password.' }); 
         return; 
     }
+    setIsAuthenticating(true);
     setStatus({ type: 'info', message: 'Verifying credentials...' });
 
     try {
@@ -85,9 +87,13 @@ export default function Login() {
         setIsVideoReady(false);
         setIsLoggingIn(true);
         fallbackTimer.current = window.setTimeout(finishLoginTransition, 12_000);
+      } else {
+        setStatus({ type: 'error', message: response.data.message || 'We could not verify your account. Check your details and try again.' });
       }
     } catch (error) {
       setStatus({ type: 'error', message: error.response?.data?.message || 'Server Error. Is the backend running?' });
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
@@ -213,9 +219,15 @@ export default function Login() {
                     <span className="pwd-toggle" onClick={() => setShowPassword(!showPassword)}><i className={`ph ${showPassword ? 'ph-eye-slash' : 'ph-eye'}`}></i></span>
                   </div>
                 </div>
-                <button type="submit" className="btn-action" style={{ width: '100%', marginTop: '0.8rem', padding: '1rem', borderRadius: '10px' }}>Sign in &rarr;</button>
+                <button type="submit" className="btn-action login-submit-button" disabled={isAuthenticating} style={{ width: '100%', marginTop: '0.8rem', padding: '1rem', borderRadius: '10px' }}>
+                  {isAuthenticating && <span className="login-status-spinner" aria-hidden="true"></span>}
+                  {isAuthenticating ? 'Signing in…' : 'Sign in →'}
+                </button>
+                {status && <div className={`login-auth-status ${status.type}`} role={status.type === 'error' ? 'alert' : 'status'} aria-live="polite">
+                  <i className={`ph ${status.type === 'error' ? 'ph-warning-circle' : 'ph-shield-check'}`} aria-hidden="true"></i>
+                  <span>{status.message}</span>
+                </div>}
               </form>
-              {status && <div className={`alert alert-${status.type}`}>{status.message}</div>}
               <div className="switch-mode">Don't have an account? <span onClick={() => navigate('/signup')}>Create account</span></div>
             </div>
           )}

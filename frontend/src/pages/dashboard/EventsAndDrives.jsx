@@ -208,19 +208,19 @@ export default function EventsAndDrives() {
 
       {/* EVENT MODAL */}
       {eventModal && (
-        <div className="report-modal-overlay">
-           <div className="report-card" style={{ maxWidth: '550px', padding: '0', overflow: 'hidden' }}>
-              <div style={{ padding: '2rem', background: 'var(--card-bg)', borderBottom: '1px solid var(--card-border)' }}>
+        <div className="report-modal-overlay event-modal-overlay" onClick={() => setEventModal(null)}>
+           <div className="report-card event-modal-card" role="dialog" aria-modal="true" aria-labelledby="event-modal-title" onClick={(event) => event.stopPropagation()}>
+              <div className="event-modal-header">
                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <h3 style={{ margin: '0 0 10px 0', color: '#fff', fontSize: '1.6rem', lineHeight: 1.2 }}>{eventModal.title || eventModal.Title}</h3>
-                    <i className="ph ph-x" style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.4rem' }} onClick={() => setEventModal(null)}></i>
+                    <h3 id="event-modal-title" style={{ margin: '0 12px 10px 0', color: 'var(--text-main)', fontSize: '1.6rem', lineHeight: 1.2 }}>{eventModal.title || eventModal.Title}</h3>
+                    <button type="button" className="event-modal-close" aria-label="Close event details" onClick={() => setEventModal(null)}><i className="ph ph-x"></i></button>
                  </div>
                  <div style={{ display: 'inline-block', padding: '6px 14px', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}>
                     {eventModal.type || eventModal.Event}
                  </div>
               </div>
 
-              <div style={{ padding: '2rem' }}>
+              <div className="event-modal-body">
                   {(eventModal.posterLink || eventModal['Poster Link']) && <DriveImage className="event-modal-poster" src={eventModal.posterLink || eventModal['Poster Link']} alt={`${eventModal.title || eventModal.Title} poster`} />}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', background: 'var(--input-bg)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--input-border)', marginBottom: '1.5rem' }}>
                       <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Date</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{eventModal.date || eventModal['Date of the Event']}</span></div>

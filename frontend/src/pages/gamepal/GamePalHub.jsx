@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import CognitiveMiniGame from './CognitiveMiniGame';
 import ReferenceMiniGame from './ReferenceMiniGames';
+import DriveImage from '../../components/ui/DriveImage';
 
 const CATEGORIES = ['Memory', 'Attention', 'Language', 'Math', 'Problem Solving', 'Flexibility', 'Speed'];
 const GAMES = [
@@ -26,18 +27,21 @@ const GAMES = [
 const REFERENCE_GAME_IDS = new Set(['pinpoint', 'crossclimb', 'queens', 'tango', 'zip', 'mini-sudoku', 'patches', 'wend']);
 
 const indiaDateKey = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-const categoryScore = (stats, category) => Number(stats?.categories?.[category.replace(/\s/g, '')] ?? stats?.categories?.[category] ?? 500) || 0;
+const categoryScore = (stats, category) => Number(stats?.categories?.[category.replace(/\s/g, '')] ?? stats?.categories?.[category] ?? 0) || 0;
 const cleanName = (name) => String(name || 'Student').trim().split(/\s+/)[0];
 
 export default function GamePalHub() {
-  const { user, getDriveImageUrl } = useOutletContext();
+  const { user } = useOutletContext();
   const [stats, setStats] = useState(null);
   const [recentSessions, setRecentSessions] = useState([]);
+  const [friendChallenges, setFriendChallenges] = useState([]);
+  const [friendEmail, setFriendEmail] = useState('');
+  const [friendGameId, setFriendGameId] = useState(GAMES[0].id);
+  const [activeChallenge, setActiveChallenge] = useState(null);
   const [activeGame, setActiveGame] = useState(null);
   const [activeTab, setActiveTab] = useState('Today');
   const [selectedGoals, setSelectedGoals] = useState([]);
   const [completedToday, setCompletedToday] = useState([]);
-  const [profileImageFailed, setProfileImageFailed] = useState(false);
   const [loading, setLoading] = useState(() => Boolean(user?.email));
   const [message, setMessage] = useState('');
 
@@ -62,6 +66,40 @@ export default function GamePalHub() {
       .catch(() => { if (!cancelled) setRecentSessions([]); });
     return () => { cancelled = true; };
   }, [user?.email]);
+
+  useEffect(() => {
+    if (!user?.email || activeTab !== 'Play with friends') return undefined;
+    let cancelled = false;
+    const loadChallenges = () => api.get('/api/gamepal/friends')
+      .then((res) => { if (!cancelled && res.data.success) setFriendChallenges(res.data.challenges || []); })
+      .catch((error) => { if (!cancelled) setMessage(error.response?.data?.message || 'Could not load friend challenges.'); });
+    loadChallenges();
+    const interval = window.setInterval(loadChallenges, 30_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [user?.email, activeTab]);
+
+  const refreshFriendChallenges = async () => {
+    const response = await api.get('/api/gamepal/friends');
+    if (response.data.success) setFriendChallenges(response.data.challenges || []);
+  };
+
+  const createFriendChallenge = async (event) => {
+    event.preventDefault();
+    if (!friendEmail.trim()) { setMessage('Enter your friend’s IPCS account email.'); return; }
+    const game = GAMES.find((item) => item.id === friendGameId) || GAMES[0];
+    setMessage('Sending your game challenge…');
+    try {
+      const response = await api.post('/api/gamepal/friends', { opponentEmail: friendEmail, gameId: game.id, gameName: game.name });
+      if (!response.data.success) throw new Error(response.data.message || 'Could not send the challenge.');
+      setActiveChallenge(response.data.challenge);
+      setActiveGame(game);
+      setMessage(`Challenge created for ${friendEmail.trim()}. Play your round now; your friend can open Play with friends to take their turn.`);
+      setFriendEmail('');
+      await refreshFriendChallenges();
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.message || 'Could not send the challenge.');
+    }
+  };
 
   useEffect(() => {
     if (!stats || !user?.email) return;
@@ -116,12 +154,25 @@ export default function GamePalHub() {
         gameName, category, score, accuracy, timeSeconds,
       });
       if (!response.data.success) throw new Error(response.data.message || 'Your session could not be saved.');
+      let challengeStatus = '';
+      if (activeChallenge?.id) {
+        try {
+          const challengeResponse = await api.post(`/api/gamepal/friends/${encodeURIComponent(activeChallenge.id)}/score`, { score, accuracy });
+          const result = challengeResponse.data;
+          challengeStatus = result.status === 'Complete'
+            ? result.winner === 'Tie' ? ' Friend challenge tied.' : ` ${result.winner} won the friend challenge.`
+            : ' Your score is saved; waiting for your friend.';
+          await refreshFriendChallenges();
+        } catch (challengeError) {
+          challengeStatus = ` Your game was saved, but its challenge score could not sync: ${challengeError.response?.data?.message || challengeError.message}`;
+        }
+      }
       setCompletedToday((previous) => {
         const next = [...new Set([...previous, gameName])];
         try { localStorage.setItem(completionKey, JSON.stringify(next)); } catch { /* Continue with this visit's state. */ }
         return next;
       });
-      setMessage(`Workout complete — ${accuracy}% accuracy. Your progress has been saved.`);
+      setMessage(`Workout complete — ${accuracy}% accuracy. Your progress has been saved.${challengeStatus}`);
       const [dashboardResult, historyResult] = await Promise.allSettled([
         api.post('/api/gamepal/dashboard', {}), api.get('/api/gamepal/history'),
       ]);
@@ -130,36 +181,38 @@ export default function GamePalHub() {
     } catch (error) {
       setMessage(error.response?.data?.message || error.message || 'Your session could not be saved.');
     }
+    setActiveChallenge(null);
     setActiveGame(null);
   };
 
   if (activeGame) {
     const Game = REFERENCE_GAME_IDS.has(activeGame.id) ? ReferenceMiniGame : CognitiveMiniGame;
-    return <Game game={activeGame} onComplete={handleGameComplete} onExit={() => setActiveGame(null)} />;
+    const initialLevel = Math.min(5, Math.max(1, Number(stats.games?.[activeGame.name]?.level) || 1));
+    return <Game game={activeGame} initialLevel={initialLevel} onComplete={handleGameComplete} onExit={() => { setActiveChallenge(null); setActiveGame(null); }} />;
   }
 
   if (loading) return <div className="gamepal-loading"><i className="ph ph-spinner animate-spin"></i><span>Preparing your daily workout…</span></div>;
   if (!stats) return <div className="gamepal-loading error"><i className="ph ph-warning-circle"></i><span>{message || 'GamePal could not load.'}</span><button className="btn-action" onClick={() => window.location.reload()}>Try again</button></div>;
 
-  const hasPhoto = Boolean(user?.photo && user.photo !== 'N/A' && !profileImageFailed);
-  const overall = Number(stats.overallScore) || 500;
+  const hasPhoto = Boolean(user?.photo && user.photo !== 'N/A');
+  const overall = Number(stats.overallScore) || 0;
   const routineDone = dailyGames.length > 0 && dailyGames.every((game) => completedToday.includes(game.name));
 
   return (
     <div className="gamepal-page animate-fade-in">
       <header className="gamepal-header">
         <div className="gamepal-brand-lockup">
-          <div className="gamepal-avatar">{hasPhoto ? <img src={getDriveImageUrl(user.photo)} onError={() => setProfileImageFailed(true)} referrerPolicy="no-referrer" alt="Your profile" /> : <span>{firstName.charAt(0).toUpperCase()}</span>}</div>
+          <div className="gamepal-avatar">{hasPhoto ? <DriveImage src={user.photo} alt="Your profile">{firstName.charAt(0).toUpperCase()}</DriveImage> : <span>{firstName.charAt(0).toUpperCase()}</span>}</div>
           <div><p className="eyebrow">IPCS cognitive practice</p><h1>GamePal</h1><span>Small daily sessions. Steady progress.</span></div>
         </div>
         <div className="gamepal-streak"><i className="ph-fill ph-fire"></i><div><strong>{stats.currentStreak || 0}</strong><span>day streak</span></div></div>
       </header>
 
       <nav className="gamepal-tabs" aria-label="GamePal sections">
-        {['Today', 'Game library', 'Progress'].map((tab) => <button type="button" key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab === 'Today' ? <i className="ph ph-sun"></i> : tab === 'Game library' ? <i className="ph ph-game-controller"></i> : <i className="ph ph-chart-line-up"></i>}{tab}</button>)}
+        {['Today', 'Game library', 'Play with friends', 'Progress'].map((tab) => <button type="button" key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab === 'Today' ? <i className="ph ph-sun"></i> : tab === 'Game library' ? <i className="ph ph-game-controller"></i> : tab === 'Play with friends' ? <i className="ph ph-users-three"></i> : <i className="ph ph-chart-line-up"></i>}{tab}</button>)}
       </nav>
 
-      {message && <div className="gamepal-feedback" role="status"><i className="ph ph-info"></i><span>{message}</span><button type="button" aria-label="Dismiss message" onClick={() => setMessage('')}><i className="ph ph-x"></i></button></div>}
+      {message && <div className={`gamepal-feedback ${/complete|saved|won|tied/i.test(message) ? 'success' : /could not|failed|error/i.test(message) ? 'error' : /waiting|sending|invite/i.test(message) ? 'pending' : ''}`} role="status"><i className={`ph ${/complete|saved|won|tied/i.test(message) ? 'ph-check-circle' : /could not|failed|error/i.test(message) ? 'ph-warning-circle' : 'ph-info'}`}></i><span>{message}</span><button type="button" aria-label="Dismiss message" onClick={() => setMessage('')}><i className="ph ph-x"></i></button></div>}
 
       {activeTab === 'Today' && (
         <>
@@ -196,11 +249,38 @@ export default function GamePalHub() {
         </section>
       )}
 
+      {activeTab === 'Play with friends' && (
+        <section className="gamepal-friends-panel">
+          <div className="gamepal-section-heading"><div><p className="eyebrow">Friendly score challenge</p><h2>Play with friends</h2><span>Invite another IPCS student to play the same mini-game and compare scores.</span></div><button type="button" className="gamepal-link-button" onClick={() => refreshFriendChallenges().catch((error) => setMessage(error.response?.data?.message || 'Could not refresh challenges.'))}><i className="ph ph-arrow-clockwise"></i> Refresh</button></div>
+          <form className="gamepal-friend-invite" onSubmit={createFriendChallenge}>
+            <label>Friend’s IPCS email<input type="email" value={friendEmail} onChange={(event) => setFriendEmail(event.target.value)} placeholder="student@ipcsglobal.com" required /></label>
+            <label>Choose a game<select value={friendGameId} onChange={(event) => setFriendGameId(event.target.value)}>{GAMES.map((game) => <option value={game.id} key={game.id}>{game.name} · {game.category}</option>)}</select></label>
+            <button type="submit" className="gamepal-primary-action"><i className="ph ph-paper-plane-tilt"></i> Invite & play</button>
+          </form>
+          <div className="gamepal-friend-challenges">
+            {friendChallenges.length ? friendChallenges.map((challenge) => {
+              const isCreator = challenge.creatorEmail === String(user?.email || '').toLowerCase();
+              const myScore = isCreator ? challenge.creatorScore : challenge.opponentScore;
+              const friendName = isCreator ? challenge.opponentName : challenge.creatorName;
+              const played = myScore !== null && myScore !== undefined;
+              const game = GAMES.find((item) => item.id === challenge.gameId);
+              return <article className="gamepal-friend-challenge" key={challenge.id}>
+                <span className="gamepal-friend-icon"><i className={`ph-fill ${game?.icon || 'ph-game-controller'}`}></i></span>
+                <div><strong>{challenge.gameName}</strong><span>{isCreator ? 'Challenge for' : 'Challenge from'} {friendName || 'IPCS student'}</span><small>{challenge.status === 'Complete' ? `You: ${myScore ?? '—'} · Friend: ${isCreator ? challenge.opponentScore : challenge.creatorScore}` : played ? 'Your score is in. Waiting for your friend.' : 'Play once to record your score.'}</small></div>
+                <span className={`gamepal-challenge-status ${challenge.status === 'Complete' ? 'complete' : played ? 'pending' : ''}`}>{challenge.status}</span>
+                {!played && game && <button type="button" className="btn-action" onClick={() => { setActiveChallenge(challenge); setActiveGame(game); }}>Play now</button>}
+              </article>;
+            }) : <p className="gamepal-history-empty">No game challenges yet. Invite a friend to start one.</p>}
+          </div>
+        </section>
+      )}
+
       {activeTab === 'Progress' && (
         <section className="gamepal-progress-layout">
           <article className="gamepal-progress-overview"><p className="eyebrow">Your performance</p><h2>{overall}</h2><p>Overall brain score</p><div className="gamepal-progress-stats"><div><strong>{stats.currentStreak || 0}</strong><span>day streak</span></div><div><strong>{stats.lastPlayedDate === 'Never' ? '—' : stats.lastPlayedDate}</strong><span>last session</span></div></div></article>
-          <article className="gamepal-skills-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Seven areas</p><h2>Skill breakdown</h2></div></div>{CATEGORIES.map((category) => { const score = categoryScore(stats, category); const percentage = Math.min(100, Math.max(0, (score / 2000) * 100)); const game = GAMES.find((item) => item.category === category); return <div className="gamepal-skill-row" key={category}><div><span><i className={`ph ${game.icon}`} style={{ color: game.tint }}></i>{category}</span><strong>{score}</strong></div><div className="gamepal-skill-track"><span style={{ width: `${percentage}%`, background: game.tint }}></span></div></div>; })}</article>
-          <article className="gamepal-history-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Your recent sessions</p><h2>Practice history</h2></div><span>{recentSessions.length} saved</span></div>{recentSessions.length ? <div className="gamepal-history-list">{recentSessions.slice(0, 8).map((session, index) => { const game = GAMES.find((item) => item.category === session.category); const accuracy = Number.parseInt(session.accuracy, 10) || 0; return <div className="gamepal-history-entry" key={`${session.date}-${session.gameName}-${index}`}><span className="gamepal-history-icon" style={{ color: game?.tint || 'var(--accent-cyan)' }}><i className={`ph-fill ${game?.icon || 'ph-game-controller'}`}></i></span><div className="gamepal-history-copy"><strong>{session.gameName}</strong><span>{session.category} · {session.date || 'Session'}</span></div><div className="gamepal-history-result"><strong>{session.score} pts</strong><span>{accuracy}% accuracy</span></div><div className="gamepal-history-track"><i style={{ width: `${Math.min(100, Math.max(4, accuracy))}%`, background: game?.tint || 'var(--accent-cyan)' }}></i></div></div>; })}</div> : <p className="gamepal-history-empty">Finish your first mini-game and your recent practice will show up here.</p>}</article>
+          <article className="gamepal-skills-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Seven areas</p><h2>Skill breakdown</h2></div></div>{CATEGORIES.map((category) => { const score = categoryScore(stats, category); const percentage = Math.min(100, Math.max(0, score / 2)); const game = GAMES.find((item) => item.category === category); return <div className="gamepal-skill-row" key={category}><div><span><i className={`ph ${game.icon}`} style={{ color: game.tint }}></i>{category}</span><strong>{score}</strong></div><div className="gamepal-skill-track"><span style={{ width: `${percentage}%`, background: game.tint }}></span></div></div>; })}</article>
+          <article className="gamepal-history-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Your game-by-game records</p><h2>Scores and levels</h2></div></div>{GAMES.map((game) => { const record = stats.games?.[game.name]; return <div className="gamepal-skill-row" key={game.id}><div><span><i className={`ph ${game.icon}`} style={{ color: game.tint }}></i>{game.name}</span><strong>{record ? `${record.bestScore} pts · Lv ${record.level}` : 'Not played'}</strong></div><div className="gamepal-skill-track"><span style={{ width: `${Math.min(100, (record?.bestScore || 0) / 3)}%`, background: game.tint }}></span></div></div>; })}</article>
+          <article className="gamepal-history-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Your recent sessions</p><h2>Practice history</h2></div><span>{recentSessions.length} saved</span></div>{recentSessions.length ? <div className="gamepal-history-list">{recentSessions.slice(0, 8).map((session, index) => { const game = GAMES.find((item) => item.name === session.gameName); const accuracy = Number.parseInt(session.accuracy, 10) || 0; return <div className="gamepal-history-entry" key={`${session.date}-${session.gameName}-${index}`}><span className="gamepal-history-icon" style={{ color: game?.tint || 'var(--accent-cyan)' }}><i className={`ph-fill ${game?.icon || 'ph-game-controller'}`}></i></span><div className="gamepal-history-copy"><strong>{session.gameName}</strong><span>{session.category} · {session.date || 'Session'}</span></div><div className="gamepal-history-result"><strong>{session.score} pts</strong><span>{accuracy}% accuracy</span></div><div className="gamepal-history-track"><i style={{ width: `${Math.min(100, Math.max(4, accuracy))}%`, background: game?.tint || 'var(--accent-cyan)' }}></i></div></div>; })}</div> : <p className="gamepal-history-empty">Finish your first mini-game and your recent practice will show up here.</p>}</article>
         </section>
       )}
       <p className="gamepal-disclaimer">GamePal is for learning and everyday cognitive practice. Scores describe your GamePal sessions and are not medical assessments.</p>

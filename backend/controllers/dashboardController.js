@@ -25,7 +25,7 @@ function isSameDay(dateStr, now) {
     let parsedDate = new Date(cleanStr);
     if (isNaN(parsedDate.getTime())) {
         let parts = cleanStr.split(/[-/]/);
-        if (parts.length === 3) parsedDate = parts[0].length <= 2 ? new Date(parts[2], parts[1] - 1, parts[0]) : new Date(parts[0], parts[1] - 1, parts[2]);
+    if (parts.length === 3) parsedDate = parts[0].length === 4 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date(parts[2], parts[0] - 1, parts[1]);
     }
     if (!isNaN(parsedDate.getTime())) return parsedDate.getDate() === now.getDate() && parsedDate.getMonth() === now.getMonth() && parsedDate.getFullYear() === now.getFullYear();
     return false;
@@ -51,8 +51,9 @@ const parseDateKey = (value) => {
     if (match) {
         const first = Number(match[1]);
         const second = Number(match[2]);
-        const day = first > 12 ? first : second > 12 ? second : first;
-        const month = first > 12 ? second : second > 12 ? first : second;
+        const month = first;
+        const day = second;
+        if (month < 1 || month > 12 || day < 1 || day > 31) return null;
         return `${match[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     }
     const date = new Date(text);
@@ -77,7 +78,7 @@ const findStudent = async (email) => {
     return {
         name: getCol(row, 1, 'Student'), phone: getCol(row, 2), email: getCol(row, 3),
         rollNo: getCol(row, 5), joiningDate: getCol(row, 6), course: getCol(row, 7),
-        branch: getCol(row, 8), photo: getCol(row, 9), qualification: getCol(row, 11),
+        branch: getCol(row, 8), photo: getCol(row, 9), qualification: getCol(row, 11), fresherStatus: getCol(row, 13),
         resume: getCol(row, 21), vacancyOpen: getCol(row, 29, 'No'),
     };
 };
@@ -352,6 +353,10 @@ const applyForJob = async (req, res) => {
             }
         }
         if (!opening) return res.status(404).json({ success: false, message: 'This job opening is no longer available.' });
+        const requiresExperience = /experienced|\d\s*\+?\s*years?|\d+\s*to\s*\d+\s*years?/i.test(getCol(opening, 12));
+        if (requiresExperience && /fresher|no experience|entry.level/i.test(student.fresherStatus)) {
+            return res.status(403).json({ success: false, message: 'This opening requires prior experience. Your profile is marked as a fresher, so applications are disabled.' });
+        }
         const openingStatus = normalize(opening[18] || 'yes');
         if (openingStatus.includes('no') || openingStatus.includes('closed') || openingStatus === 'false') return res.status(400).json({ success: false, message: 'This job opening has closed.' });
         const applyBy = parseDateKey(getCol(opening, 16));

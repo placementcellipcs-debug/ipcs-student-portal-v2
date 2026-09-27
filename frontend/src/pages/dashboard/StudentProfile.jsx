@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import DriveImage from '../../components/ui/DriveImage';
 
 export default function StudentProfile() {
   const { user, setUser } = useOutletContext();
@@ -12,7 +13,6 @@ export default function StudentProfile() {
   
   const [docStatus, setDocStatus] = useState({ type: '', msg: '' });
   const [photoUploading, setPhotoUploading] = useState(false);
-  const [photoAttempt, setPhotoAttempt] = useState(0);
 
   const openEditModal = () => {
     setEpData({
@@ -84,7 +84,7 @@ export default function StudentProfile() {
                 setUser(updatedUser);
                 localStorage.setItem('talentino_student_user', JSON.stringify(updatedUser));
                 
-                if (docType === 'Photo') { setPhotoUploading(false); setPhotoAttempt(0); } 
+                if (docType === 'Photo') setPhotoUploading(false);
                 else { 
                   setDocStatus({ type: 'success', msg: `${docType} uploaded successfully!` }); 
                   setTimeout(() => setDocStatus({ type: '', msg: '' }), 3000); 
@@ -98,15 +98,7 @@ export default function StudentProfile() {
     };
   };
 
-  const photoCandidates = (() => {
-    const url = user?.photo;
-    if (!url || url === 'N/A' || typeof url !== 'string') return [];
-    const match = url.match(/(?:id=|\/d\/)([\w-]+)/);
-    if (!match) return [url];
-    const id = match[1];
-    return [`https://drive.google.com/thumbnail?id=${id}&sz=w500`, `https://lh3.googleusercontent.com/d/${id}`, `https://drive.google.com/uc?export=view&id=${id}`];
-  })();
-  const hasPhoto = photoAttempt < photoCandidates.length;
+  const hasPhoto = Boolean(user?.photo && user.photo !== 'N/A');
   const initial = (user?.name || 'U').charAt(0).toUpperCase();
 
   return (
@@ -127,7 +119,7 @@ export default function StudentProfile() {
             <div style={{ position: 'relative', width: '140px', height: '140px', margin: '0 auto 1.5rem auto' }}>
               <div style={{ width: '100%', height: '100%', borderRadius: '50%', border: '4px solid #38bdf8', padding: '4px', background: 'var(--bg-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 0 30px rgba(56, 189, 248, 0.3)' }}>
                  {photoUploading ? <i className="ph ph-spinner animate-spin" style={{ fontSize: '3rem', color: '#38bdf8' }}></i> : (
-                     hasPhoto ? <img src={photoCandidates[photoAttempt]} onError={() => setPhotoAttempt((attempt) => attempt + 1)} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 35%', borderRadius: '50%' }} alt="Profile" /> 
+                     hasPhoto ? <DriveImage src={user.photo} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 35%', borderRadius: '50%' }} alt="Profile"><span style={{ fontSize: '4rem', fontWeight: 900, color: '#38bdf8' }}>{initial}</span></DriveImage>
                      : <span style={{ fontSize: '4rem', fontWeight: 900, color: '#38bdf8' }}>{initial}</span>
                  )}
               </div>

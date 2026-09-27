@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import DriveImage from '../../components/ui/DriveImage';
 
 const parseSafeDate = (dateStr) => {
   if (!dateStr || dateStr === "N/A" || dateStr === "undefined" || String(dateStr).toUpperCase() === "TBA") return null;
@@ -10,8 +11,8 @@ const parseSafeDate = (dateStr) => {
       const [, first, second, third] = parts;
       const yearFirst = first.length === 4;
       const year = Number(yearFirst ? first : third);
-      const month = Number(second);
-      const day = Number(yearFirst ? third : first);
+      const month = Number(yearFirst ? second : first);
+      const day = Number(yearFirst ? third : second);
       const parsedDate = new Date(year, month - 1, day);
       if (parsedDate.getFullYear() === year && parsedDate.getMonth() === month - 1 && parsedDate.getDate() === day) return parsedDate;
   }
@@ -33,6 +34,7 @@ export default function EventsAndDrives() {
 
   // Calendar Engine States
   const [calDate, setCalDate] = useState(new Date());
+  const [view, setView] = useState('calendar');
 
   useEffect(() => {
     if (!user?.email) return undefined;
@@ -98,6 +100,9 @@ export default function EventsAndDrives() {
   
   const prevMonth = () => setCalDate(new Date(calYear, calMonth - 1, 1));
   const nextMonth = () => setCalDate(new Date(calYear, calMonth + 1, 1));
+  const upcomingEvents = data.events.map((event) => ({ ...event, parsedDate: parseSafeDate(event.date || event['Date of the Event']) }))
+    .filter((event) => !event.parsedDate || event.parsedDate >= new Date(new Date().setHours(0, 0, 0, 0)))
+    .sort((a, b) => !a.parsedDate ? 1 : !b.parsedDate ? -1 : a.parsedDate - b.parsedDate);
 
   if (loading) return <div style={{ textAlign: 'center', padding: '5rem', color: '#38bdf8' }}><i className="ph ph-spinner animate-spin" style={{ fontSize: '3rem' }}></i></div>;
 
@@ -113,15 +118,20 @@ export default function EventsAndDrives() {
   return (
     <div className="events-page animate-fade-in" style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
       <div style={{ marginBottom: '2.5rem' }}>
-        <h2 style={{ margin: '0 0 5px 0', fontSize: '2.2rem', fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>Events & Drives</h2>
+        <h2 style={{ margin: '0 0 5px 0', fontSize: '2.2rem', fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>Events</h2>
         <p style={{ color: '#94a3b8', fontSize: '1rem', margin: 0 }}>Discover placement drives, technical sessions, and masterclasses.</p>
       </div>
 
-      {data.events.length === 0 && (
+      <nav className="events-view-tabs" aria-label="Events views">
+        <button type="button" className={view === 'calendar' ? 'active' : ''} aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}><i className="ph ph-calendar-blank"></i> Calendar</button>
+        <button type="button" className={view === 'upcoming' ? 'active' : ''} aria-pressed={view === 'upcoming'} onClick={() => setView('upcoming')}><i className="ph ph-clock-countdown"></i> Upcoming events <span>{upcomingEvents.length}</span></button>
+      </nav>
+
+      {data.events.length === 0 && view === 'calendar' && (
         <div className="events-empty-note"><i className="ph ph-calendar-blank"></i><div><strong>No events are scheduled for your branch yet.</strong><span>New drives and campus sessions will appear on this calendar when they are published.</span></div></div>
       )}
 
-      <div className="cal-layout">
+      {view === 'calendar' ? <div className="cal-layout">
         
         {/* Sidebar Legend */}
         <div className="cal-sidebar">
@@ -185,7 +195,16 @@ export default function EventsAndDrives() {
            </div>
         </div>
 
-      </div>
+      </div> : <section className="upcoming-events-list" aria-label="Upcoming events">
+        {upcomingEvents.length ? upcomingEvents.map((event, index) => (
+          <button type="button" className="upcoming-event-card" key={event.id || event['Drive ID'] || `${event.title}-${index}`} onClick={() => { setEventModal(event); setRsvpStatus(null); }}>
+            <span className="upcoming-event-date-label">{event.parsedDate ? event.parsedDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Date to be announced'}</span>
+            <strong>{event.title || event.Title || 'IPCS event'}</strong>
+            <span>{event.type || event.Event || 'General event'}{(event.time || event['Time of the Event']) ? ` · ${event.time || event['Time of the Event']}` : ''}</span>
+            <span>{event.location || event['Event Hapening in'] || 'Location to be announced'} <i className="ph ph-arrow-up-right"></i></span>
+          </button>
+        )) : <div className="events-empty-note"><i className="ph ph-calendar-blank"></i><div><strong>No upcoming events.</strong><span>New branch events and placement drives will show here.</span></div></div>}
+      </section>}
 
       {/* EVENT MODAL */}
       {eventModal && (
@@ -202,6 +221,7 @@ export default function EventsAndDrives() {
               </div>
 
               <div style={{ padding: '2rem' }}>
+                  {(eventModal.posterLink || eventModal['Poster Link']) && <DriveImage className="event-modal-poster" src={eventModal.posterLink || eventModal['Poster Link']} alt={`${eventModal.title || eventModal.Title} poster`} />}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', background: 'var(--input-bg)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--input-border)', marginBottom: '1.5rem' }}>
                       <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Date</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{eventModal.date || eventModal['Date of the Event']}</span></div>
                       <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Time</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{eventModal.time || eventModal['Time of the Event'] || 'TBA'}</span></div>

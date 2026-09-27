@@ -5,13 +5,17 @@ import api from '../../config/axios';
 const parseSafeDate = (dateStr) => {
   if (!dateStr || dateStr === "N/A" || dateStr === "undefined" || String(dateStr).toUpperCase() === "TBA") return null;
   let cleanStr = String(dateStr).replace(/,/g, '').replace(/\s+/g, ' ').trim();
-  let parsedDate = new Date(cleanStr);
-  if (!isNaN(parsedDate.getTime())) return parsedDate;
-  let parts = cleanStr.split(/[-/]/);
+  const parts = cleanStr.split(/[-/]/);
   if (parts.length === 3) {
-      parsedDate = new Date(parts[2], parts[1] - 1, parts[0]); 
-      if (!isNaN(parsedDate.getTime())) return parsedDate;
+      const yearFirst = parts[0].length === 4;
+      const year = Number(yearFirst ? parts[0] : parts[2]);
+      const month = Number(yearFirst ? parts[1] : parts[0]);
+      const day = Number(yearFirst ? parts[2] : parts[1]);
+      const parsedDate = new Date(year, month - 1, day);
+      if (parsedDate.getFullYear() === year && parsedDate.getMonth() === month - 1 && parsedDate.getDate() === day) return parsedDate;
   }
+  const parsedDate = new Date(cleanStr);
+  if (!isNaN(parsedDate.getTime())) return parsedDate;
   return null;
 };
 
@@ -73,6 +77,10 @@ export default function JobVacancies() {
   }, [user]);
 
   const openApplyConfirm = () => {
+    if (requiresExperience(jobModal) && studentIsFresher) {
+      setActionStatus({ type: 'warning', message: 'This opening requires prior experience. Your profile is marked as a fresher, so applications are disabled.' });
+      return;
+    }
     if (!user.resume || user.resume === "N/A" || !user.resume.startsWith("http")) { 
       setActionStatus({ type: 'error', message: 'Resume Required! Please upload your PDF Resume document in your Profile before applying.' }); 
       setShowConsent(true); 
@@ -116,6 +124,8 @@ export default function JobVacancies() {
   const visibleVacancies = (activeTab === 'active' ? activeVacancies : expiredVacancies).filter((vacancy) => (
     `${vacancy.position} ${vacancy.company} ${vacancy.location} ${vacancy.state}`.toLowerCase().includes(searchQuery.trim().toLowerCase())
   ));
+  const requiresExperience = (vacancy) => /experienced|\d\s*\+?\s*years?|\d+\s*to\s*\d+\s*years?/i.test(String(vacancy.experience || ''));
+  const studentIsFresher = /fresher|no experience|entry.level/i.test(String(user?.fresherStatus || ''));
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
@@ -165,9 +175,7 @@ export default function JobVacancies() {
                        <div><dt>Apply by</dt><dd>{vacancy.lastDate}</dd></div>
                      </dl>
                      <div className="vacancy-card-footer">
-                       {isApplied ? <span className="vacancy-applied"><i className="ph-fill ph-check-circle"></i> Application submitted</span>
-                         : isExpired ? <span className="vacancy-expired-label">This opening has closed</span>
-                         : <button type="button" className="btn-action" onClick={() => { setJobModal(vacancy); setActionStatus(null); setShowConsent(false); setQ1(false); setQ2(false); }}>View opening <i className="ph ph-arrow-up-right"></i></button>}
+                       <button type="button" className="btn-action vacancy-view-button" onClick={() => { setJobModal(vacancy); setActionStatus(null); setShowConsent(false); setQ1(false); setQ2(false); }}>View details <i className="ph ph-arrow-up-right"></i></button>
                      </div>
                    </article>
                  );
@@ -261,6 +269,8 @@ export default function JobVacancies() {
                     </>
                   )}
                 </div>
+              ) : requiresExperience(jobModal) && studentIsFresher ? (
+                <div className="vacancy-eligibility-note"><i className="ph ph-info"></i><span>This opening requires prior experience. You can review the details, but your current profile is marked as a fresher, so applications are disabled.</span><button className="btn-cancel" onClick={() => setJobModal(null)}>Close</button></div>
               ) : (
                 <div style={{ display: 'flex', gap: '15px', marginTop: '2rem' }}>
                   <button className="btn-action" style={{ flex: 2, background: '#10b981', padding: '1rem', fontSize: '1rem' }} onClick={openApplyConfirm}>Apply Now &rarr;</button>

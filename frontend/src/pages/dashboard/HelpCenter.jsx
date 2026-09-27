@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import DriveImage from '../../components/ui/DriveImage';
 
 export default function HelpCenter() {
-  const { user, dashboardData, getDriveImageUrl } = useOutletContext();
+  const { user, dashboardData } = useOutletContext();
   const location = useLocation();
   const [issueDetails, setIssueDetails] = useState('');
   const [issueStatus, setIssueStatus] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [photoError, setPhotoError] = useState(false);
   const tpo = dashboardData?.tpoInfo || {};
   const tpoName = tpo.name || tpo['TPO Name'] || 'Placement Officer';
   const tpoEmail = tpo.email || tpo.mailId || tpo['Mail ID'] || 'placement@ipcsglobal.com';
@@ -66,8 +66,8 @@ export default function HelpCenter() {
         <section className="portal-panel tpo-panel" id="contact-tpo">
           <div className="tpo-profile">
             <div className="tpo-avatar">
-              {tpoPhoto && tpoPhoto !== 'N/A' && !photoError
-                ? <img src={getDriveImageUrl(tpoPhoto)} alt={`${tpoName} profile`} onError={() => setPhotoError(true)} />
+              {tpoPhoto && tpoPhoto !== 'N/A'
+                ? <DriveImage src={tpoPhoto} alt={`${tpoName} profile`}><i className="ph ph-user-tie" aria-hidden="true"></i></DriveImage>
                 : <i className="ph ph-user-tie" aria-hidden="true"></i>}
             </div>
             <div><p className="eyebrow">Your placement contact</p><h2>{tpoName}</h2><p>{tpoBranch}</p></div>

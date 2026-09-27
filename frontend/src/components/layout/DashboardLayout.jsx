@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../config/axios';
+import DriveImage from '../ui/DriveImage';
 
 const GLOBAL_LOGO_URL = 'https://lh3.googleusercontent.com/d/1VqmH9-l2lBHErJPW1tCjtCu-SrTEMPtN';
 const COVER_BANNER_URL = 'https://lh3.googleusercontent.com/d/1eiP135HOsuG3MEaEplNblmcLewjnKXp6';
@@ -24,8 +25,8 @@ const parseEventDate = (value) => {
     const [, first, second, third] = parts;
     const yearFirst = first.length === 4;
     const year = Number(yearFirst ? first : third);
-    const month = Number(second);
-    const day = Number(yearFirst ? third : first);
+    const month = Number(yearFirst ? second : first);
+    const day = Number(yearFirst ? third : second);
     const date = new Date(year, month - 1, day);
     if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) return date;
   }
@@ -50,7 +51,7 @@ const NAV_GROUPS = [
     { label: 'GamePal Hub', path: '/dashboard/gamepal', icon: 'ph-game-controller' },
   ] },
   { label: 'Campus life', items: [
-    { label: 'Events & Drives', path: '/dashboard/events', icon: 'ph-calendar-blank' },
+    { label: 'Events', path: '/dashboard/events', icon: 'ph-calendar-blank' },
     { label: 'Talentino Attendance', path: '/dashboard/talentino', icon: 'ph-user-check' },
     { label: 'Student Diary', path: '/dashboard/student-diary', icon: 'ph-notebook' },
     { label: 'Leave & Absence', path: '/dashboard/leave', icon: 'ph-calendar-x' },
@@ -74,8 +75,8 @@ export default function DashboardLayout() {
   const location = useLocation();
   const [user, setUser] = useState(() => readLocalValue('talentino_student_user', {}));
   const [theme, setTheme] = useState(() => readLocalValue('talentino_student_theme', 'dark'));
+  const [accent, setAccent] = useState(() => readLocalValue('talentino_student_accent', 'cyan'));
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [profilePhotoState, setProfilePhotoState] = useState({ photo: '', index: 0, failed: false });
   const [dashboardData, setDashboardData] = useState(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -107,12 +108,14 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-accent', accent);
     try {
       localStorage.setItem('talentino_student_theme', JSON.stringify(theme));
+      localStorage.setItem('talentino_student_accent', JSON.stringify(accent));
     } catch (error) {
-      console.warn('Could not save theme preference:', error);
+      console.warn('Could not save appearance preferences:', error);
     }
-  }, [theme]);
+  }, [theme, accent]);
 
   useEffect(() => {
     if (!notificationsOpen) return undefined;
@@ -321,31 +324,6 @@ export default function DashboardLayout() {
     const basePath = path.split('#')[0];
     return location.pathname === basePath || (basePath !== '/dashboard' && location.pathname.startsWith(`${basePath}/`)) ? 'active' : '';
   };
-  const getDriveImageCandidates = (url) => {
-    if (!url || url === 'N/A' || typeof url !== 'string') return null;
-    if (/^(data:image\/|blob:)/i.test(url)) return [url];
-    const match = url.match(/(?:id=|\/d\/)([\w-]+)/);
-    if (!match) return [url];
-    const id = match[1];
-    return [
-      `https://drive.google.com/thumbnail?id=${id}&sz=w400`,
-      `https://lh3.googleusercontent.com/d/${id}`,
-      `https://drive.google.com/uc?export=view&id=${id}`,
-    ];
-  };
-  const getDriveImageUrl = (url) => getDriveImageCandidates(url)?.[0] || null;
-  const profilePhotoCandidates = getDriveImageCandidates(user?.photo) || [];
-  const currentPhotoState = profilePhotoState.photo === user?.photo
-    ? profilePhotoState
-    : { photo: user?.photo || '', index: 0, failed: false };
-  const { index: photoAttempt, failed: imageError } = currentPhotoState;
-  const handleProfilePhotoError = () => {
-    setProfilePhotoState((previous) => {
-      const currentIndex = previous.photo === user?.photo ? previous.index : 0;
-      const nextIndex = currentIndex + 1;
-      return { photo: user?.photo || '', index: nextIndex, failed: nextIndex >= profilePhotoCandidates.length };
-    });
-  };
   const markNotificationsRead = () => {
     setReadNotifications((previous) => [...new Set([...previous, ...notifications.map((item) => item.id)])]);
   };
@@ -420,7 +398,7 @@ export default function DashboardLayout() {
     }
   };
 
-  const hasPhoto = user?.photo && user.photo !== 'N/A' && !imageError;
+  const hasPhoto = user?.photo && user.photo !== 'N/A';
   const firstName = (user?.name || 'Student').trim().split(/\s+/)[0];
   const initial = firstName.charAt(0).toUpperCase();
 
@@ -480,7 +458,7 @@ export default function DashboardLayout() {
           </div>
           <button type="button" className="user-profile-badge" aria-label="Open profile and navigation" onClick={() => setDrawerOpen(true)}>
             <span className="avatar-circle">
-              {hasPhoto ? <img src={profilePhotoCandidates[photoAttempt]} onError={handleProfilePhotoError} referrerPolicy="no-referrer" alt={`${firstName}'s profile`} /> : <span>{initial}</span>}
+              {hasPhoto ? <DriveImage src={user.photo} alt={`${firstName}'s profile`}>{initial}</DriveImage> : <span>{initial}</span>}
             </span>
           </button>
         </div>
@@ -488,7 +466,7 @@ export default function DashboardLayout() {
 
       <main className="main-body">
         <div className="dashboard-content">
-          <Outlet context={{ user, setUser, getDriveImageUrl, theme, toggleTheme, dashboardData, canInstallApp: Boolean(installPrompt), installApp, isAppInstalled, isIOS }} />
+          <Outlet context={{ user, setUser, theme, toggleTheme, accent, setAccent, dashboardData, canInstallApp: Boolean(installPrompt), installApp, isAppInstalled, isIOS }} />
         </div>
       </main>
 
@@ -496,6 +474,7 @@ export default function DashboardLayout() {
         <div className="report-modal-overlay drive-reminder-overlay" role="presentation">
           <section className="report-card drive-reminder-card" role="dialog" aria-modal="true" aria-labelledby="drive-reminder-title">
             <div className="drive-reminder-icon"><i className="ph-fill ph-megaphone"></i></div>
+            {drivePopup.posterLink && <DriveImage className="drive-reminder-poster" src={drivePopup.posterLink} alt={`${eventTitle(drivePopup)} poster`} />}
             <p className="eyebrow">Placement drive reminder</p>
             <h2 id="drive-reminder-title">{eventTitle(drivePopup)}</h2>
             <p className="drive-reminder-meta">{eventDateLabel(drivePopup)}{(drivePopup.time || drivePopup['Time of the Event']) ? ` · ${drivePopup.time || drivePopup['Time of the Event']}` : ''}</p>
@@ -520,7 +499,7 @@ export default function DashboardLayout() {
             <button type="button" className="drawer-close-btn" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)}><i className="ph ph-x"></i></button>
             <div className="drawer-profile-row">
               <div className="drawer-avatar">
-                {hasPhoto ? <img src={profilePhotoCandidates[photoAttempt]} onError={handleProfilePhotoError} referrerPolicy="no-referrer" alt={`${firstName}'s profile`} /> : <span>{initial}</span>}
+                {hasPhoto ? <DriveImage src={user.photo} alt={`${firstName}'s profile`}>{initial}</DriveImage> : <span>{initial}</span>}
               </div>
               <div>
                 <strong className="drawer-profile-name">{firstName}</strong>

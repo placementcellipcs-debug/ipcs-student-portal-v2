@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const DatabaseService = require('../services/dbService');
+const { getCourseAccess, courseMatchesAccess } = require('../services/courseService');
 
 const examSessions = new Map();
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
@@ -163,9 +164,10 @@ const getSpecificTest = async (req, res) => {
         if (type === 'talentino' && ![1, 2, 3].includes(parsedTestNum)) return res.status(400).json({ success: false, message: 'Invalid Talentino test.' });
         if (type === 'technical' && !isEnabled(student.techExamAccess)) return res.status(403).json({ success: false, message: 'Technical exam access has not been enabled for your account.' });
 
-        const [rows, history] = await Promise.all([
+        const [rows, history, courseRows] = await Promise.all([
             DatabaseService.getSheetData(type === 'talentino' ? 'Talentino_Questions!A:K' : 'Tech_Questions!A:K'),
             type === 'talentino' ? DatabaseService.getSheetData('Talentino_Results!A:J') : DatabaseService.getSheetData('Tech_Results!A:J'),
+            type === 'technical' ? DatabaseService.getSheetData('Courses!A:B', process.env.SPREADSHEET_ID, 300) : Promise.resolve([]),
         ]);
         const isReview = req.body.isReview === true;
         const hasCompleted = history.slice(1).some((row) => clean(row[3]).toLowerCase() === student.email.toLowerCase()
@@ -178,12 +180,13 @@ const getSpecificTest = async (req, res) => {
             if (!previousCompleted) return res.status(403).json({ success: false, message: `Complete Test ${parsedTestNum - 1} before unlocking this test.` });
         }
 
+        const courseAccess = type === 'technical' ? getCourseAccess(student.course, courseRows) : new Set();
         const questions = [];
         for (let i = 1; i < rows.length; i++) {
             if (!isActive(rows[i][9])) continue;
             const matches = type === 'talentino'
                 ? (parseInt(rows[i][1], 10) || 1) === parsedTestNum
-                : clean(rows[i][1]).toLowerCase() === student.course.toLowerCase();
+                : courseMatchesAccess(rows[i][1], courseAccess);
             if (!matches) continue;
             questions.push({
                 id: `${clean(rows[i][0]) || 'Q'}-${parsedTestNum}-${i}`,

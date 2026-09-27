@@ -1,6 +1,5 @@
 const DatabaseService = require('../services/dbService');
-
-const normalizeCourse = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+const { normalizeCourse, getCourseAccess, courseMatchesAccess } = require('../services/courseService');
 
 const getStudentMaterialAccess = async (email) => {
     const [userDataRows, courseRows] = await Promise.all([
@@ -18,29 +17,11 @@ const getStudentMaterialAccess = async (email) => {
     const studentCourse = normalizeCourse(student[7]);
     if (!studentCourse) return { allowed: false, courses: new Set() };
 
-    let currentCategory = '';
-    let studentCategory = '';
-    for (const row of courseRows) {
-        const category = String(row[0] || '').trim().replace(/^\d+\.\s*/, '');
-        const subcourse = String(row[1] || '').trim();
-        if (category) currentCategory = category;
-        if (subcourse && normalizeCourse(subcourse) === studentCourse) {
-            studentCategory = normalizeCourse(currentCategory);
-            break;
-        }
-    }
-
-    return { allowed: true, courses: new Set([studentCourse, studentCategory].filter(Boolean)) };
+    return { allowed: true, courses: getCourseAccess(studentCourse, courseRows) };
 };
 
 const materialMatchesStudent = (materialCourse, courseAccess) => {
-    const normalized = normalizeCourse(materialCourse);
-    if (!normalized || ['all', 'all courses', 'all students'].includes(normalized)) return true;
-    return [...courseAccess].some((studentCourse) => (
-        normalized === studentCourse
-        || normalized.includes(studentCourse)
-        || studentCourse.includes(normalized)
-    ));
+    return courseMatchesAccess(materialCourse, courseAccess);
 };
 
 const getActiveMaterial = (row, index) => {

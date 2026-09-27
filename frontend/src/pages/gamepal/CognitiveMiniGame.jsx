@@ -28,7 +28,7 @@ function createChallenge(game, level, round) {
     return { prompt: 'Remember the sequence, then choose it after it hides.', sequence, options: asChoices(answer, alternatives), answer };
   }
   if (game.id === 'language') {
-    const pool = WORDS.filter((word) => word.length >= Math.min(7, 4 + level / 2));
+    const pool = WORDS.filter((word) => word.length >= Math.min(7, 4 + Math.floor(level / 2)));
     const answer = pool[Math.floor(Math.random() * pool.length)] || WORDS[0];
     const letters = answer.split('');
     let scrambled = shuffle(letters).join('');
@@ -58,12 +58,12 @@ function createChallenge(game, level, round) {
     return { prompt: `Rule: Is ${number} ${rule.toLowerCase()}?`, display: String(number), options: ['Yes', 'No'], answer: answer ? 'Yes' : 'No', rule };
   }
   const target = 1 + Math.floor(Math.random() * 9);
-  return { prompt: `Find ${target} as quickly as you can.`, display: String(target), options: shuffle(Array.from({ length: 4 }, () => String(1 + Math.floor(Math.random() * 9))).filter((number) => number !== String(target)).slice(0, 3).concat(String(target))), answer: String(target) };
+  return { prompt: `Find ${target} as quickly as you can.`, display: String(target), options: asChoices(target, shuffle(Array.from({ length: 9 }, (_, index) => index + 1).filter((number) => number !== target)).slice(0, 3)), answer: String(target) };
 }
 
-export default function CognitiveMiniGame({ game, onComplete, onExit }) {
+export default function CognitiveMiniGame({ game, onComplete, onExit, initialLevel = 1 }) {
   const [round, setRound] = useState(1);
-  const [level, setLevel] = useState(1);
+  const [level, setLevel] = useState(() => Math.max(1, Math.min(5, Number(initialLevel) || 1)));
   const [correct, setCorrect] = useState(0);
   const [score, setScore] = useState(0);
   const [answerState, setAnswerState] = useState({ round: 1, selected: '' });

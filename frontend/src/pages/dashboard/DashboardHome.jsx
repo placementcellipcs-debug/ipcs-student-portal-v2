@@ -1,5 +1,6 @@
 import { Link, useOutletContext } from 'react-router-dom';
 import Counter from '../../components/ui/Counter';
+import DriveImage from '../../components/ui/DriveImage';
 
 const QUICK_LINKS = [
   { label: 'Mark attendance', detail: 'View your sessions and check in', path: '/dashboard/talentino', icon: 'ph-user-check', color: '#10b981' },
@@ -15,15 +16,18 @@ const QUICK_LINKS = [
 const parseDate = (value) => {
   if (!value || String(value).toUpperCase() === 'TBA') return null;
   const text = String(value).replace(/,/g, '').replace(/\s+/g, ' ').trim();
-  let date = new Date(text);
-  if (!Number.isNaN(date.getTime())) return date;
   const parts = text.split(/[-/]/);
   if (parts.length === 3) {
-    date = parts[0].length === 4
+    const date = parts[0].length === 4
       ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
-      : new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
-    if (!Number.isNaN(date.getTime())) return date;
+      : new Date(Number(parts[2]), Number(parts[0]) - 1, Number(parts[1]));
+    const year = Number(parts[0].length === 4 ? parts[0] : parts[2]);
+    const month = Number(parts[0].length === 4 ? parts[1] : parts[0]);
+    const day = Number(parts[0].length === 4 ? parts[2] : parts[1]);
+    if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) return date;
   }
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) return date;
   return null;
 };
 
@@ -33,7 +37,7 @@ const showDate = (event) => {
 };
 
 export default function DashboardHome() {
-  const { user, getDriveImageUrl, dashboardData } = useOutletContext();
+  const { user, dashboardData } = useOutletContext();
   const stats = dashboardData?.stats || {};
   const firstName = (user?.name || 'Student').trim().split(/\s+/)[0];
   const hasPhoto = user?.photo && user.photo !== 'N/A';
@@ -72,7 +76,7 @@ export default function DashboardHome() {
           </div>
         </div>
         <div className="welcome-student-avatar">
-          {hasPhoto ? <img src={getDriveImageUrl(user.photo)} alt={`${firstName}'s profile`} /> : <span>{firstName.charAt(0).toUpperCase()}</span>}
+          {hasPhoto ? <DriveImage src={user.photo} alt={`${firstName}'s profile`}>{firstName.charAt(0).toUpperCase()}</DriveImage> : <span>{firstName.charAt(0).toUpperCase()}</span>}
         </div>
       </section>
 

@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 
 export default function Settings() {
-  const { theme, toggleTheme, canInstallApp, installApp, isAppInstalled, isIOS } = useOutletContext();
+  const { theme, toggleTheme, accent, setAccent, canInstallApp, installApp, isAppInstalled, isIOS } = useOutletContext();
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [showPasswords, setShowPasswords] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState(null);
@@ -99,6 +99,15 @@ export default function Settings() {
                 {theme === option && <small>Current theme</small>}
               </button>
             ))}
+          </div>
+          <div className="accent-picker">
+            <strong>Accent color</strong>
+            <p>Choose the highlight color used across the portal.</p>
+            <div className="accent-swatches" role="group" aria-label="Accent color">
+              {[['cyan', 'Sky'], ['blue', 'Blue'], ['purple', 'Violet'], ['green', 'Green'], ['rose', 'Rose'], ['orange', 'Amber']].map(([value, label]) => (
+                <button type="button" key={value} className={`accent-swatch ${accent === value ? 'selected' : ''}`} data-color={value} aria-label={`${label} accent`} aria-pressed={accent === value} onClick={() => setAccent(value)}><span></span>{label}</button>
+              ))}
+            </div>
           </div>
         </section>
 

@@ -107,17 +107,6 @@ export default function Login() {
           className={isVideoReady ? 'ready' : ''}
           aria-hidden="true"
         />
-        <div className="login-loader-desktop" role="status" aria-live="polite">
-          <img src={GLOBAL_LOGO_URL} alt="IPCS Global" />
-          <div className="login-loader-desktop-copy">
-            <span>Welcome to IPCS Global</span>
-            <h1>Your learning space is ready.</h1>
-            <p>Loading your classes, student resources, and placement journey.</p>
-            <div className="login-loader-progress"><i></i></div>
-            <small>Preparing your dashboard…</small>
-          </div>
-          <div className="login-loader-desktop-mark"><i className="ph-fill ph-graduation-cap"></i><span>Student Portal</span></div>
-        </div>
       </div>
     );
   }

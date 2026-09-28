@@ -1,0 +1,10 @@
+{
+  "appId": "com.talenzo.app",
+  "appName": "Talenzo",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://ipcs-student-portal-v2.vercel.app",
+    "cleartext": true
+  }
+}

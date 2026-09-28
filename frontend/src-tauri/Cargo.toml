@@ -1,7 +1,7 @@
 [package]
 name = "ipcs-student-portal"
 version = "1.0.0"
-description = "IPCS Global Student Portal"
+description = "Talenzo student portal from IPCS Global"
 authors = ["IPCS Global"]
 edition = "2021"
 

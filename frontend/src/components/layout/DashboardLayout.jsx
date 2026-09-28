@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../ui/DriveImage';
+import talenzoBrandMark from '../../assets/talenzo-brand-mark.png';
 
-const GLOBAL_LOGO_URL = 'https://lh3.googleusercontent.com/d/1VqmH9-l2lBHErJPW1tCjtCu-SrTEMPtN';
 const COVER_BANNER_URL = 'https://lh3.googleusercontent.com/d/1eiP135HOsuG3MEaEplNblmcLewjnKXp6';
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -53,8 +53,6 @@ const NAV_GROUPS = [
   { label: 'Campus life', items: [
     { label: 'Events', path: '/dashboard/events', icon: 'ph-calendar-blank' },
     { label: 'Talentino Attendance', path: '/dashboard/talentino', icon: 'ph-user-check' },
-    { label: 'Student Diary', path: '/dashboard/student-diary', icon: 'ph-notebook' },
-    { label: 'Leave & Absence', path: '/dashboard/leave', icon: 'ph-calendar-x' },
   ] },
   { label: 'Career', items: [
     { label: 'Job Openings', path: '/dashboard/vacancies', icon: 'ph-briefcase' },
@@ -406,7 +404,7 @@ export default function DashboardLayout() {
     <div className="app-layout">
       <header className="top-header">
         <div className="header-left">
-          <img src={GLOBAL_LOGO_URL} alt="IPCS Global" className="header-logo-img" />
+          <img src={talenzoBrandMark} alt="Talenzo" className="header-logo-img" />
         </div>
         <div className="header-right">
           <button className="header-icon-btn" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={toggleTheme}>

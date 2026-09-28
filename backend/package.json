@@ -4,7 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start-desktop": "electron .",
+    "build-desktop": "vite build && electron-builder"
   },
   "keywords": [],
   "type": "commonjs",

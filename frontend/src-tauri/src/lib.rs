@@ -2,5 +2,5 @@
 pub fn run() {
     tauri::Builder::default()
         .run(tauri::generate_context!())
-        .expect("error while running IPCS Student Portal");
+        .expect("error while running Talenzo");
 }

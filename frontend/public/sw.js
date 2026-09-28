@@ -1,5 +1,5 @@
-const CACHE_NAME = 'ipcs-student-portal-v1';
-const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/app-icon-192.png', '/icons/app-icon-512.png'];
+const CACHE_NAME = 'talenzo-v2';
+const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/talenzo-brand-mark.png', '/icons/app-icon-192.png', '/icons/app-icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -12,7 +12,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key.startsWith('ipcs-student-portal-') && key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => (key.startsWith('ipcs-student-portal-') || key.startsWith('talenzo-')) && key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });

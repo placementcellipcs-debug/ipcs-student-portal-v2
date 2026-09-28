@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "IPCS Student Portal",
-  "short_name": "IPCS Portal",
-  "description": "Student resources, attendance, placements, and GamePal from IPCS Global.",
+  "name": "Talenzo",
+  "short_name": "Talenzo",
+  "description": "Student resources, attendance, events, and career opportunities from IPCS Global.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

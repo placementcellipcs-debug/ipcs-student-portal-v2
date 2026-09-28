@@ -119,7 +119,7 @@ export default function Settings() {
           {isAppInstalled ? (
             <div className="install-status"><i className="ph-fill ph-check-circle"></i><span>This portal is already installed on this device.</span></div>
           ) : canInstallApp ? (
-            <button type="button" className="btn-action" onClick={installApp}>Install IPCS Student Portal</button>
+            <button type="button" className="btn-action" onClick={installApp}>Install Talenzo</button>
           ) : (
             <div className="install-instructions">
               <strong>{isIOS ? 'Add to your Home Screen' : 'Install from your browser'}</strong>

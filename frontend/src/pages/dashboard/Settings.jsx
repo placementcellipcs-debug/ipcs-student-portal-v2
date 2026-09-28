@@ -123,8 +123,9 @@ export default function Settings() {
           {/* Native App Download Buttons */}
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
             <a 
-              href="/downloads/Talenzo.apk" 
-              download="Talenzo.apk" 
+              href="https://drive.google.com/file/d/1D8vnuerOECQyZuvpjhYSeVG7A4B7ZTKV/view?usp=drive_link" 
+              target="_blank"
+              rel="noopener noreferrer"
               className="btn-action" 
               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}
             >
@@ -133,7 +134,7 @@ export default function Settings() {
             </a>
             
             <a 
-              href="https://drive.google.com/file/d/1U4eCdEI-KL9UR9rfSLE2mOx8galOMGwk/view?usp=sharing" 
+              href="https://drive.google.com/file/d/1Xmf6gAeXxaoTmxEjpmrUnYlGHy7dMXM3/view?usp=drive_link" 
               target="_blank"
               rel="noopener noreferrer"
               className="btn-action" 

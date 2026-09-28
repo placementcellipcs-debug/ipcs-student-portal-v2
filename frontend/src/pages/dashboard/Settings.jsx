@@ -114,12 +114,43 @@ export default function Settings() {
         <section className="portal-panel settings-panel install-panel">
           <div className="panel-heading">
             <span className="panel-heading-icon"><i className="ph ph-device-mobile"></i></span>
-            <div><h2>Use the portal like an app</h2><p>Install the portal from your browser for a home-screen or desktop shortcut.</p></div>
+            <div>
+              <h2>Use the portal like an app</h2>
+              <p>Download standalone native apps for your devices, or install the portal directly from your browser.</p>
+            </div>
           </div>
+
+          {/* Native App Download Buttons */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
+            <a 
+              href="/downloads/Talenzo.apk" 
+              download="Talenzo.apk" 
+              className="btn-action" 
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}
+            >
+              <i className="ph ph-android-logo" style={{ color: '#34d399', fontSize: '1.2rem' }}></i> 
+              Download for Android (.apk)
+            </a>
+            
+            <a 
+              href="/downloads/Talenzo-Setup.exe" 
+              download="Talenzo-Setup.exe" 
+              className="btn-action" 
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}
+            >
+              <i className="ph ph-windows-logo" style={{ color: '#38bdf8', fontSize: '1.2rem' }}></i> 
+              Download for Windows (.exe)
+            </a>
+          </div>
+
+          <hr style={{ borderColor: 'rgba(255,255,255,0.1)', margin: '0 0 20px 0' }} />
+
+          {/* Browser PWA Installation */}
+          <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: 'var(--text-muted)' }}>Browser Installation</h3>
           {isAppInstalled ? (
-            <div className="install-status"><i className="ph-fill ph-check-circle"></i><span>This portal is already installed on this device.</span></div>
+            <div className="install-status"><i className="ph-fill ph-check-circle"></i><span>This portal is already installed via browser on this device.</span></div>
           ) : canInstallApp ? (
-            <button type="button" className="btn-action" onClick={installApp}>Install Talenzo</button>
+            <button type="button" className="btn-action" onClick={installApp}>Install via Browser</button>
           ) : (
             <div className="install-instructions">
               <strong>{isIOS ? 'Add to your Home Screen' : 'Install from your browser'}</strong>

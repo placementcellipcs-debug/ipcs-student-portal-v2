@@ -8,16 +8,21 @@ dotenv.config();
 
 const app = express();
 
-// Configure CORS for local development and future production URLs
+// Configure CORS for local development, Vercel testing, and production domains
 const allowedOrigins = [...new Set([
   ...(process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map((origin) => origin.trim()).filter(Boolean),
   ...(process.env.NATIVE_APP_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+  'http://localhost:5173',
   'http://localhost:3000',
-  'https://ipcs-student-portal-v2.vercel.app' // <-- Added your Vercel frontend URL
+  'https://placement.ipcsglobal.info',          // Main Production Frontend
+  'https://ipcs-student-portal-v2.vercel.app',  // Vercel Testing Frontend
+  'capacitor://localhost',                     // Native Mobile Fallback
+  'ionic://localhost'
 ])];
 
 app.use(cors({
   origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, or Postman)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {

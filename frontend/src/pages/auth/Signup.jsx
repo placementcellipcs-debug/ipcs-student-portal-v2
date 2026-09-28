@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Cropper from 'react-easy-crop';
 import api from '../../config/axios';
-import talenzoBrandMark from '../../assets/talenzo-brand-mark.png';
+import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
 
 
 const sanitizePhoneNumber = (val) => {
@@ -173,7 +173,7 @@ export default function Signup() {
               <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>Register records, course details, and placement preferences</p>
           </div>
           <div className="brand-logo-container" style={{ marginBottom: 0 }}>
-              <img src={talenzoBrandMark} alt="Talenzo" style={{ height: '38px', width: '38px', objectFit: 'contain' }} />
+              <img src={ipcsGlobalLogo} alt="IPCS Global" style={{ height: '38px', width: '110px', objectFit: 'contain' }} />
           </div>
         </div>
 

@@ -3,6 +3,33 @@ import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../../components/ui/DriveImage';
 
+const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(new Error('The selected file could not be read.'));
+  reader.readAsDataURL(file);
+});
+
+const prepareProfilePhoto = async (file) => {
+  const source = await readFileAsDataUrl(file);
+  const image = new Image();
+  await new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = () => reject(new Error('This image format could not be opened. Please choose a JPG or PNG photo.'));
+    image.src = source;
+  });
+
+  const maxSize = 800;
+  const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Your browser could not prepare this photo.');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.86);
+};
+
 export default function StudentProfile() {
   const { user, setUser } = useOutletContext();
   
@@ -13,6 +40,7 @@ export default function StudentProfile() {
   
   const [docStatus, setDocStatus] = useState({ type: '', msg: '' });
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoStatus, setPhotoStatus] = useState({ type: '', msg: '' });
 
   const openEditModal = () => {
     setEpData({
@@ -44,58 +72,47 @@ export default function StudentProfile() {
   };
 
   const handleDocumentUpload = async (e, docType) => {
-    const file = e.target.files[0];
+    const input = e.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
     
     if (docType !== 'Photo' && file.type !== "application/pdf") { 
-      setDocStatus({ type: 'error', msg: 'Only PDF allowed for documents' }); e.target.value = null; return; 
+      setDocStatus({ type: 'error', msg: 'Only PDF allowed for documents' }); input.value = ''; return;
     }
     if (docType === 'Photo' && !file.type.startsWith("image/")) { 
-      alert("Only image files are allowed for profile photos."); e.target.value = null; return; 
+      setPhotoStatus({ type: 'error', msg: 'Choose an image file for your profile photo.' }); input.value = ''; return;
     }
     
-    if (docType === 'Photo') setPhotoUploading(true); 
+    if (docType === 'Photo') {
+      setPhotoUploading(true);
+      setPhotoStatus({ type: 'info', msg: 'Preparing and saving your photo…' });
+    }
     else setDocStatus({ type: 'info', msg: `Processing and uploading ${docType}...` });
-    
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = async (event) => {
-        let finalBase64 = event.target.result;
-        
-        // Compress Image
-        if (docType === 'Photo') {
-            const img = new Image(); img.src = finalBase64;
-            await new Promise((resolve) => {
-                img.onload = () => {
-                    const canvas = document.createElement('canvas'); const MAX_WIDTH = 400; const MAX_HEIGHT = 400;
-                    let width = img.width; let height = img.height;
-                    if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
-                    canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
-                    finalBase64 = canvas.toDataURL('image/jpeg', 0.8); resolve();
-                };
-            });
-        }
-        
-        try {
-            const res = await api.post('/api/dashboard/profile/document', { email: user.email, rollNo: user.rollNo, base64: finalBase64, docType });
-            if (res.data.success) {
-                let key = docType === 'Resume' ? 'resume' : docType === 'Photo' ? 'photo' : 'certificate';
-                const updatedUser = { ...user, [key]: res.data.url };
-                setUser(updatedUser);
-                localStorage.setItem('talentino_student_user', JSON.stringify(updatedUser));
-                
-                if (docType === 'Photo') setPhotoUploading(false);
-                else { 
-                  setDocStatus({ type: 'success', msg: `${docType} uploaded successfully!` }); 
-                  setTimeout(() => setDocStatus({ type: '', msg: '' }), 3000); 
-                }
-            }
-        } catch(err) {
-            console.error('Document upload failed:', err);
-            if (docType === 'Photo') { setPhotoUploading(false); alert(`Upload failed.`); } 
-            else { setDocStatus({ type: 'error', msg: 'Upload failed.' }); }
-        } finally { e.target.value = null; }
-    };
+
+    try {
+      const finalBase64 = docType === 'Photo' ? await prepareProfilePhoto(file) : await readFileAsDataUrl(file);
+      const res = await api.post('/api/dashboard/profile/document', { email: user.email, rollNo: user.rollNo, base64: finalBase64, docType });
+      if (!res.data?.success || !res.data?.url) throw new Error(res.data?.message || 'The upload did not return a saved file.');
+
+      const key = docType === 'Resume' ? 'resume' : docType === 'Photo' ? 'photo' : 'certificate';
+      const updatedUser = { ...user, [key]: res.data.url };
+      setUser(updatedUser);
+      localStorage.setItem('talentino_student_user', JSON.stringify(updatedUser));
+
+      if (docType === 'Photo') setPhotoStatus({ type: 'success', msg: 'Profile photo updated.' });
+      else {
+        setDocStatus({ type: 'success', msg: `${docType} uploaded successfully!` });
+        setTimeout(() => setDocStatus({ type: '', msg: '' }), 3000);
+      }
+    } catch (error) {
+      console.error('Document upload failed:', error);
+      const message = error.response?.data?.message || error.message || 'Upload failed. Please try again.';
+      if (docType === 'Photo') setPhotoStatus({ type: 'error', msg: message });
+      else setDocStatus({ type: 'error', msg: message });
+    } finally {
+      if (docType === 'Photo') setPhotoUploading(false);
+      input.value = '';
+    }
   };
 
   const hasPhoto = Boolean(user?.photo && user.photo !== 'N/A');
@@ -128,6 +145,7 @@ export default function StudentProfile() {
               </div>
               <input type="file" id="photoUploadInput" accept="image/*" className="hidden" onChange={(e) => handleDocumentUpload(e, 'Photo')} />
             </div>
+            {photoStatus.msg && <div className={`alert alert-${photoStatus.type}`} role="status" style={{ margin: '-0.5rem 0 1.25rem' }}>{photoStatus.msg}</div>}
             
             <h2 style={{ margin: '0 0 8px 0', fontSize: '1.8rem', fontWeight: 900, color: '#fff' }}>{user?.name}</h2>
             <div style={{ color: '#38bdf8', fontWeight: 800, letterSpacing: '1px', marginBottom: '15px' }}>{user?.rollNo}</div>

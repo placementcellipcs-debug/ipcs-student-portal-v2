@@ -438,45 +438,60 @@ const uploadDocument = async (req, res) => {
         const student = await findStudent(email);
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
         const { base64, docType } = req.body;
-        if (!['Photo', 'Resume', 'Certificate'].includes(docType) || typeof base64 !== 'string' || !base64.startsWith('data:')) {
+        const dataUrlMatch = typeof base64 === 'string' && base64.match(/^data:([^;,]+);base64,([\s\S]+)$/i);
+        if (!['Photo', 'Resume', 'Certificate'].includes(docType) || !dataUrlMatch) {
             return res.status(400).json({ success: false, message: 'Choose a valid profile document.' });
         }
+        const mimeType = dataUrlMatch[1].toLowerCase();
+        if ((docType === 'Photo' && !mimeType.startsWith('image/')) || (docType !== 'Photo' && mimeType !== 'application/pdf')) {
+            return res.status(400).json({ success: false, message: docType === 'Photo' ? 'Choose a valid image file.' : 'Choose a PDF document.' });
+        }
         const rollNo = student.rollNo;
-        
-        const base64Clean = docType === 'Photo' ? base64.replace(/^data:image\/\w+;base64,/, "") : base64.replace(/^data:application\/pdf;base64,/, "");
+        const base64Clean = dataUrlMatch[2];
+        const uploadMimeType = docType === 'Photo' ? mimeType : 'application/pdf';
         
         const response = await axios.post(process.env.APPS_SCRIPT_PHOTO_URL, { 
             action: 'uploadOnly', email: email, rollNo: rollNo, base64: base64Clean, docType: docType,
-            filename: `${rollNo}_${docType}`, mimeType: docType === 'Photo' ? 'image/jpeg' : 'application/pdf',
+            filename: `${rollNo}_${docType}`, mimeType: uploadMimeType,
             folderName: docType === 'Photo' ? 'Profile Photo' : (docType === 'Resume' ? 'Resumes' : 'Certificates'),
             folderId: process.env.DRIVE_FOLDER_ID, parentFolderId: process.env.DRIVE_FOLDER_ID
         }, { timeout: 30000 });
         
-        if (!response.data || !response.data.success) {
-            return res.status(500).json({ success: false, message: "Drive upload failed" });
+        const uploadedUrl = String(response.data?.url || '').trim();
+        if (!response.data?.success || !uploadedUrl) {
+            return res.status(502).json({ success: false, message: response.data?.message || 'The file could not be saved to Drive.' });
         }
 
-        try {
-            const { googleSheets, auth } = await connectSheet();
-            const spreadsheetId = process.env.SPREADSHEET_ID;
-            const rows = await DatabaseService.getSheetData("Data!A:D");
-            let targetRowIndex = -1;
-            
-            for (let i = rows.length - 1; i >= 1; i--) {
-                if (rows[i][3] && rows[i][3].toLowerCase() === email.toLowerCase()) { targetRowIndex = i + 1; break; }
+        const { googleSheets, auth } = await connectSheet();
+        const spreadsheetId = process.env.SPREADSHEET_ID;
+        const rows = await DatabaseService.getSheetData('Data!A:D');
+        let targetRowIndex = -1;
+        for (let i = rows.length - 1; i >= 1; i--) {
+            if (normalize(rows[i][3]) === email) {
+                targetRowIndex = i + 1;
+                break;
             }
-            
-            if (targetRowIndex !== -1) {
-                let columnLetter = docType === 'Photo' ? 'J' : (docType === 'Resume' ? 'V' : 'AC');
-                await DatabaseService.withRetry(() => 
-                    googleSheets.spreadsheets.values.update({ auth, spreadsheetId, range: `Data!${columnLetter}${targetRowIndex}`, valueInputOption: "USER_ENTERED", resource: { values: [[response.data.url]] } })
-                );
-            }
-        } catch (sheetUpdateErr) {}
+        }
+        if (targetRowIndex === -1) {
+            return res.status(404).json({ success: false, message: 'The uploaded file could not be linked to your student profile.' });
+        }
 
-        return res.status(200).json({ success: true, message: `${docType} uploaded successfully!`, url: response.data.url });
+        const versionedUrl = new URL(uploadedUrl);
+        versionedUrl.searchParams.set('v', String(Date.now()));
+        const columnLetter = docType === 'Photo' ? 'J' : (docType === 'Resume' ? 'V' : 'AC');
+        await DatabaseService.withRetry(() => googleSheets.spreadsheets.values.update({
+            auth,
+            spreadsheetId,
+            range: `Data!${columnLetter}${targetRowIndex}`,
+            valueInputOption: 'USER_ENTERED',
+            resource: { values: [[versionedUrl.toString()]] },
+        }));
+        DatabaseService.flushCache();
+
+        return res.status(200).json({ success: true, message: `${docType} uploaded successfully!`, url: versionedUrl.toString() });
     } catch (error) { 
-        return res.status(500).json({ success: false, message: "Server error during upload." }); 
+        console.error('Profile document upload failed:', error.response?.data || error.message);
+        return res.status(500).json({ success: false, message: 'The upload could not be completed. Please try again.' });
     }
 };
 

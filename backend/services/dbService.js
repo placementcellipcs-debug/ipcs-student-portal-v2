@@ -4,6 +4,10 @@ const NodeCache = require('node-cache');
 const dbCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
 
 class DatabaseService {
+    static flushCache() {
+        dbCache.flushAll();
+    }
+
     static async withRetry(fn, retries = 5, delay = 1000) {
         for (let i = 0; i < retries; i++) {
             try { return await fn(); } 

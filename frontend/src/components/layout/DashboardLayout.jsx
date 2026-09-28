@@ -17,6 +17,14 @@ const readLocalValue = (key, fallback) => {
   }
 };
 
+const photoCacheVersion = (photoUrl) => {
+  try {
+    return Number(new URL(String(photoUrl || ''), window.location.origin).searchParams.get('v')) || 0;
+  } catch {
+    return 0;
+  }
+};
+
 const parseEventDate = (value) => {
   if (!value || String(value).toUpperCase() === 'TBA') return null;
   const text = String(value).replace(/,/g, '').replace(/\s+/g, ' ').trim();
@@ -170,8 +178,12 @@ export default function DashboardLayout() {
 
         setDashboardData(response.data);
         if (response.data.userInfo) {
-          const mergedUser = { ...user, ...response.data.userInfo };
-          if (JSON.stringify(mergedUser) !== JSON.stringify(user)) {
+          const latestLocalUser = readLocalValue('talentino_student_user', user);
+          const mergedUser = { ...latestLocalUser, ...response.data.userInfo };
+          if (photoCacheVersion(latestLocalUser.photo) > photoCacheVersion(response.data.userInfo.photo)) {
+            mergedUser.photo = latestLocalUser.photo;
+          }
+          if (JSON.stringify(mergedUser) !== JSON.stringify(latestLocalUser)) {
             setUser(mergedUser);
             try {
               localStorage.setItem('talentino_student_user', JSON.stringify(mergedUser));

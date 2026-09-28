@@ -11,7 +11,7 @@ function createWindow () {
     }
   });
 
-  win.loadURL('https://ipcs-student-portal-v2.vercel.app');
+  win.loadURL('https://placement.ipcsglobal.info');
 }
 
 app.whenReady().then(createWindow);

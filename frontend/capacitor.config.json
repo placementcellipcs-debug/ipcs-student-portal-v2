@@ -4,7 +4,7 @@
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
-    "url": "https://ipcs-student-portal-v2.vercel.app",
+    "url": "https://placement.ipcsglobal.info",
     "cleartext": true
   },
     "plugins": {

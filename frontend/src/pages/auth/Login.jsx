@@ -2,11 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../config/axios';
 import Counter from '../../components/ui/Counter';
-import talenzoBrandMark from '../../assets/talenzo-brand-mark.png';
+import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
 
 // Import Assets
 import loadingVideo from '../../assets/video.mp4';
-import talenzoLogo from '../../assets/TALENZO111.png';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -124,7 +123,7 @@ export default function Login() {
       <div className="login-grid-glow" aria-hidden="true"></div>
 
       <div className="landing-nav">
-        <img src={talenzoBrandMark} alt="Talenzo" style={{ height: '50px', objectFit: 'contain' }} />
+        <img className="login-brand-animate" src={ipcsGlobalLogo} alt="IPCS Global" style={{ height: '50px', objectFit: 'contain' }} />
       </div>
       
       <div className="landing-grid">
@@ -135,7 +134,7 @@ export default function Login() {
               <span style={{ position: 'relative', display: 'inline-flex', borderRadius: '50%', height: '14px', width: '14px', background: '#38bdf8' }}></span>
             </span>
             
-            <img className="login-brand-animate" src={talenzoLogo} alt="Talenzo: Connecting Talent with Opportunity" style={{ height: '110px', objectFit: 'contain' }} />
+            <span className="login-brand-animate login-welcome-label">WELCOME TO IPCS GLOBAL</span>
           </div>
           
           <h1 className="hero-title">Unlock Global Tech<br/><span style={{ color: '#38bdf8' }}>Careers with IPCS</span></h1>
@@ -207,7 +206,7 @@ export default function Login() {
             </div>
           ) : (
             <div className="auth-card animate-fade-in login-form-animate">
-              <div className="brand-logo-container"><img src={talenzoBrandMark} alt="Talenzo" className="auth-logo-img" /></div>
+              <div className="brand-logo-container"><img src={ipcsGlobalLogo} alt="IPCS Global" className="auth-logo-img" /></div>
               <h2 style={{ textAlign: 'center', margin: '0 0 6px 0', color: '#ffffff' }}>Welcome</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', textAlign: 'center', marginBottom: '1.8rem' }}>Sign in to continue to your student portal</p>
               <form onSubmit={handleLogin}>

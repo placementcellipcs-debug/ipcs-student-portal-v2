@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../ui/DriveImage';
-import talenzoBrandMark from '../../assets/talenzo-brand-mark.png';
+import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
 
 const COVER_BANNER_URL = 'https://lh3.googleusercontent.com/d/1eiP135HOsuG3MEaEplNblmcLewjnKXp6';
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -404,7 +404,7 @@ export default function DashboardLayout() {
     <div className="app-layout">
       <header className="top-header">
         <div className="header-left">
-          <img src={talenzoBrandMark} alt="Talenzo" className="header-logo-img" />
+          <img src={ipcsGlobalLogo} alt="IPCS Global" className="header-logo-img" />
         </div>
         <div className="header-right">
           <button className="header-icon-btn" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={toggleTheme}>

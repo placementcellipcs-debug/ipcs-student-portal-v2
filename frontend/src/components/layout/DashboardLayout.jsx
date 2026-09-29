@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../ui/DriveImage';
 import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
@@ -476,6 +476,12 @@ export default function DashboardLayout() {
 
       <main className="main-body">
         <div className="dashboard-content">
+          {location.pathname !== '/dashboard' && (
+            <Link className="portal-back-dashboard" to="/dashboard">
+              <i className="ph ph-arrow-left" aria-hidden="true"></i>
+              <span>Back to dashboard</span>
+            </Link>
+          )}
           <Outlet context={{ user, setUser, theme, toggleTheme, accent, setAccent, dashboardData, canInstallApp: Boolean(installPrompt), installApp, isAppInstalled, isIOS }} />
         </div>
       </main>

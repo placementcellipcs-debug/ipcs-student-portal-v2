@@ -45,16 +45,34 @@
 
 /* Login motion is ambient and entrance-based; it never follows pointer movement. */
 .landing-wrapper { position: relative; }
-.landing-wrapper > :not(.login-ambient-orb):not(.login-grid-glow):not(.animate-pulse-glow) { z-index: 1; }
-.login-ambient-orb, .login-grid-glow { position: absolute; z-index: 0; pointer-events: none; }
+.landing-wrapper > :not(.login-ambient-orb):not(.login-grid-glow):not(.animate-pulse-glow):not(.login-floating-shape) { z-index: 1; }
+.login-ambient-orb, .login-grid-glow, .login-floating-shape { position: absolute; z-index: 0; pointer-events: none; }
 .login-ambient-orb { width: clamp(220px, 34vw, 480px); aspect-ratio: 1; border-radius: 50%; filter: blur(75px); opacity: .2; }
 .login-ambient-orb-one { top: 10%; left: -11%; background: #0ea5e9; opacity: .27; animation: login-orb-drift 11s ease-in-out infinite alternate; }
 .login-ambient-orb-two { right: -10%; bottom: 1%; width: clamp(250px, 38vw, 540px); background: #4f46e5; opacity: .19; animation: login-orb-drift 15s ease-in-out -7s infinite alternate-reverse; }
 .login-grid-glow { inset: 0; opacity: .22; background-image: linear-gradient(rgba(125, 211, 252, .09) 1px, transparent 1px), linear-gradient(90deg, rgba(125, 211, 252, .09) 1px, transparent 1px); background-size: 68px 68px; mask-image: linear-gradient(90deg, transparent, #000 24%, #000 80%, transparent); animation: login-grid-shift 22s linear infinite; }
+.login-floating-shape { display: block; border: 1px solid rgba(125, 211, 252, .26); }
+.login-floating-shape-ring { top: 17%; left: 47%; width: 70px; aspect-ratio: 1; border-radius: 50%; animation: login-shape-orbit 17s linear infinite, login-shape-drift 6s ease-in-out infinite alternate; }
+.login-floating-shape-diamond { right: 7%; bottom: 17%; width: 25px; height: 25px; border-color: rgba(167, 139, 250, .42); border-radius: 7px; animation: login-diamond-drift 7s ease-in-out infinite; }
+.login-floating-shape-spark { top: 63%; left: 7%; width: 12px; height: 12px; border: 0; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 22px rgba(56, 189, 248, .68); animation: login-spark-float 4.2s ease-in-out infinite; }
+.landing-wrapper .animate-pulse-glow { animation: login-ambient-pulse 6s ease-in-out infinite; }
 .login-copy-animate { animation: login-enter-left .9s cubic-bezier(.2,.75,.25,1) both; }
 .login-card-animate, .login-form-animate { animation: login-enter-card .95s cubic-bezier(.2,.75,.25,1) .12s both; }
 .login-brand-animate { transform-origin: left center; animation: login-brand-reveal .9s cubic-bezier(.2,.8,.2,1) .18s both; }
 .ticker-container { animation: login-ticker-glow 5s ease-in-out infinite; }
+.landing-wrapper .ticker-animate { display: block; animation: login-ticker-enter .4s ease both; }
+.landing-wrapper .animate-bounce { animation: login-icon-bounce 2.8s ease-in-out infinite; }
+.landing-wrapper .animate-opacity-pulse { animation: login-stage-pulse 3.2s ease-in-out infinite; }
+.landing-wrapper .hiring-dashboard-card { position: relative; isolation: isolate; }
+.landing-wrapper .hiring-dashboard-card::before, .landing-wrapper .hiring-dashboard-card::after { position: absolute; z-index: 0; content: ''; pointer-events: none; }
+.landing-wrapper .hiring-dashboard-card::before { top: -88px; right: -76px; width: 220px; height: 220px; border: 1px solid rgba(56, 189, 248, .2); border-radius: 50%; box-shadow: 0 0 0 18px rgba(56, 189, 248, .025), 0 0 0 38px rgba(56, 189, 248, .02); animation: login-shape-orbit 28s linear infinite; }
+.landing-wrapper .hiring-dashboard-card::after { right: 15%; bottom: 8%; width: 84px; height: 84px; border-radius: 50%; background: radial-gradient(circle, rgba(129, 140, 248, .19), transparent 72%); animation: login-spark-float 5s ease-in-out infinite; }
+.landing-wrapper .hiring-dashboard-card > * { position: relative; z-index: 1; }
+.landing-wrapper .hiring-dashboard-card.login-card-animate { animation: login-enter-card .95s cubic-bezier(.2,.75,.25,1) .12s both, login-dashboard-bob 7s ease-in-out 1.1s infinite; }
+.landing-wrapper .hiring-stat-box > div:first-child { animation: login-icon-bounce 3.7s ease-in-out infinite; }
+.landing-wrapper .hiring-stat-box:nth-child(2) > div:first-child { animation-delay: -.9s; }
+.landing-wrapper .hiring-stat-box:nth-child(3) > div:first-child { animation-delay: -1.7s; }
+.landing-wrapper .hiring-stat-box:nth-child(4) > div:first-child { animation-delay: -2.4s; }
 .landing-wrapper .animate-ping { animation-duration: 2.4s; }
 @keyframes login-orb-drift { from { transform: translate3d(0, -12px, 0) scale(.94); } to { transform: translate3d(36px, 28px, 0) scale(1.08); } }
 @keyframes login-grid-shift { to { background-position: 68px 68px; } }
@@ -62,6 +80,15 @@
 @keyframes login-enter-card { from { opacity: 0; transform: translate3d(0, 22px, 0) scale(.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }
 @keyframes login-brand-reveal { from { opacity: 0; transform: translate3d(0, 10px, 0) scale(.96); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }
 @keyframes login-ticker-glow { 0%, 100% { border-color: rgba(56, 189, 248, .15); box-shadow: 0 0 0 rgba(56, 189, 248, 0); } 50% { border-color: rgba(56, 189, 248, .32); box-shadow: 0 0 28px rgba(56, 189, 248, .06); } }
+@keyframes login-ticker-enter { from { opacity: 0; translate: 0 5px; } to { opacity: 1; translate: 0 0; } }
+@keyframes login-dashboard-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+@keyframes login-icon-bounce { 0%, 100% { translate: 0 0; rotate: 0deg; } 50% { translate: 0 -5px; rotate: -5deg; } }
+@keyframes login-stage-pulse { 0%, 100% { opacity: .82; box-shadow: 0 0 0 rgba(34,197,94,0); } 50% { opacity: 1; box-shadow: 0 0 20px rgba(34,197,94,.12); } }
+@keyframes login-shape-orbit { to { rotate: 1turn; } }
+@keyframes login-shape-drift { 0%, 100% { translate: 0 0; } 50% { translate: 12px -11px; } }
+@keyframes login-diamond-drift { 0%, 100% { translate: 0 0; rotate: 0deg; } 50% { translate: 0 -13px; rotate: 45deg; } }
+@keyframes login-spark-float { 0%, 100% { translate: 0 0; scale: 1; } 50% { translate: 0 -10px; scale: 1.15; } }
+@keyframes login-ambient-pulse { 0%, 100% { opacity: .08; scale: .96; } 50% { opacity: .15; scale: 1.04; } }
 .auth-wrapper { min-height: 100svh; padding: clamp(14px, 3vw, 36px); background: radial-gradient(ellipse at 5% 5%, rgba(56, 189, 248, 0.12), transparent 32%), linear-gradient(145deg, #080c14, #0c1422 55%, #080c14) !important; }
 .profile-reg-card { width: min(100%, 1120px); margin: 0 auto; padding: clamp(18px, 3vw, 34px); border: 1px solid rgba(148, 163, 184, 0.16); border-radius: 24px; background: rgba(15, 23, 42, 0.96); color: var(--text-main); box-shadow: 0 26px 80px rgba(0,0,0,0.4); }
 .reg-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--card-border); }

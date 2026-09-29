@@ -94,82 +94,77 @@ export default function DashboardHome() {
 
   return (
     <div className="dashboard-home animate-fade-in">
-      <div className="dashboard-overview-grid">
-        <div className="dashboard-overview-primary">
-          <section className="dashboard-welcome-card">
-            <div className="dashboard-welcome-copy">
-              <p className="eyebrow">{new Intl.DateTimeFormat('en-IN', { weekday: 'long', month: 'long', day: 'numeric' }).format(currentDate)}</p>
-              <h1>Welcome back, <span>{firstName}</span></h1>
-              <p>Your classes, placement journey, and student resources are all in one place.</p>
-              <div className="welcome-actions">
-                <Link className="btn-action" to="/dashboard/events">Explore events <i className="ph ph-arrow-right"></i></Link>
-                <Link className="welcome-secondary-action" to="/dashboard/profile">View profile</Link>
-              </div>
-            </div>
-            <div className="welcome-student-avatar">
-              {hasPhoto ? <DriveImage src={user.photo} alt={`${firstName}'s profile`}>{firstName.charAt(0).toUpperCase()}</DriveImage> : <span>{firstName.charAt(0).toUpperCase()}</span>}
-            </div>
-          </section>
-
-          <Link className="dashboard-vacancy-card" to="/dashboard/vacancies">
-            <span className="dashboard-vacancy-icon"><i className="ph-fill ph-briefcase"></i></span>
-            <span className="dashboard-vacancy-copy">
-              <strong>Latest placement vacancies</strong>
-              <small>{vacancyAccess
-                ? dashboardData ? `${dashboardData.vacancies?.length || 0} active openings matched to your course` : 'Explore active openings matched to your course'
-                : 'View your opening access or contact the placement team'}</small>
-            </span>
-            <span className="dashboard-vacancy-action">View openings <i className="ph ph-arrow-right"></i></span>
-          </Link>
+      <section className="dashboard-welcome-card">
+        <div className="dashboard-welcome-copy">
+          <p className="eyebrow">{new Intl.DateTimeFormat('en-IN', { weekday: 'long', month: 'long', day: 'numeric' }).format(currentDate)}</p>
+          <h1>Welcome back, <span>{firstName}</span></h1>
+          <p>Your classes, placement journey, and student resources are all in one place.</p>
+          <div className="welcome-actions">
+            <Link className="btn-action" to="/dashboard/events">Explore events <i className="ph ph-arrow-right"></i></Link>
+            <Link className="welcome-secondary-action" to="/dashboard/profile">View profile</Link>
+          </div>
         </div>
+        <div className="welcome-student-avatar">
+          {hasPhoto ? <DriveImage src={user.photo} alt={`${firstName}'s profile`}>{firstName.charAt(0).toUpperCase()}</DriveImage> : <span>{firstName.charAt(0).toUpperCase()}</span>}
+        </div>
+      </section>
 
-        <div className="dashboard-overview-secondary">
-          <section className="portal-panel upcoming-events-panel">
-            <div className="panel-heading panel-heading-with-link">
-              <div className="panel-heading-main"><span className="panel-heading-icon"><i className="ph ph-calendar-star"></i></span><div><h2>Upcoming events</h2><p>Drives, classes, and IPCS events</p></div></div>
-              <Link className="panel-link compact-panel-link" to="/dashboard/events">All events <i className="ph ph-arrow-right"></i></Link>
-            </div>
-            {!dashboardData ? (
-              <div className="dashboard-loading"><i className="ph ph-spinner animate-spin"></i> Loading events…</div>
-            ) : upcomingEvents.length ? (
-              <div className="upcoming-event-list">
-                {upcomingEvents.map((event, index) => (
-                  <Link className="upcoming-event-row" to="/dashboard/events" key={event.id || event['Drive ID'] || `${event.title || event.Title}-${index}`}>
-                    <span className="upcoming-event-date">{showDate(event)}</span>
-                    <span className="upcoming-event-copy"><strong>{event.title || event.Title || 'IPCS event'}</strong><small>{event.type || event.Event || 'General event'}{(event.time || event['Time of the Event']) ? ` · ${event.time || event['Time of the Event']}` : ''}</small></span>
-                    <i className="ph ph-caret-right" aria-hidden="true"></i>
-                  </Link>
-                ))}
-              </div>
-            ) : <div className="empty-panel-message"><i className="ph ph-calendar-blank"></i><strong>No upcoming events</strong><span>New branch events and placement drives will show here.</span></div>}
-          </section>
+      <Link className="dashboard-vacancy-card" to="/dashboard/vacancies">
+        <span className="dashboard-vacancy-icon"><i className="ph-fill ph-briefcase"></i></span>
+        <span className="dashboard-vacancy-copy">
+          <strong>Latest placement openings</strong>
+          <small>{vacancyAccess
+            ? dashboardData ? `${dashboardData.vacancies?.length || 0} active openings matched to your course` : 'Explore active openings matched to your course'
+            : 'Check your opening access or contact the placement team'}</small>
+        </span>
+        <span className="dashboard-vacancy-action">View openings <i className="ph ph-arrow-right"></i></span>
+      </Link>
 
-          <section className="portal-panel quick-actions-panel">
-            <div className="panel-heading"><span className="panel-heading-icon"><i className="ph ph-squares-four"></i></span><div><h2>Quick actions</h2><p>Jump into the tools you use most</p></div></div>
-            <div className="dashboard-quick-links">
-              {QUICK_LINKS.map((item) => (
-                <Link className="dashboard-quick-link" to={item.path} key={item.label}>
-                  <span className="quick-link-icon" style={{ color: item.color, background: `${item.color}1a` }}><i className={`ph-fill ${item.icon}`}></i></span>
-                  <span><strong>{item.label}</strong><small>{item.detail}</small></span>
-                  <i className="ph ph-arrow-up-right" aria-hidden="true"></i>
+      <div className="dashboard-actions-events-grid">
+        <section className="portal-panel quick-actions-panel">
+          <div className="panel-heading"><span className="panel-heading-icon"><i className="ph ph-squares-four"></i></span><div><h2>Quick actions</h2><p>Your most-used student tools</p></div></div>
+          <div className="dashboard-quick-links">
+            {QUICK_LINKS.map((item) => (
+              <Link className="dashboard-quick-link" to={item.path} key={item.label}>
+                <span className="quick-link-icon" style={{ color: item.color, background: `${item.color}1a` }}><i className={`ph-fill ${item.icon}`}></i></span>
+                <span><strong>{item.label}</strong><small>{item.detail}</small></span>
+                <i className="ph ph-arrow-up-right" aria-hidden="true"></i>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="portal-panel upcoming-events-panel">
+          <div className="panel-heading panel-heading-with-link">
+            <div className="panel-heading-main"><span className="panel-heading-icon"><i className="ph ph-calendar-star"></i></span><div><h2>Upcoming events</h2><p>Drives, classes, and IPCS events</p></div></div>
+            <Link className="panel-link compact-panel-link" to="/dashboard/events">All events <i className="ph ph-arrow-right"></i></Link>
+          </div>
+          {!dashboardData ? (
+            <div className="dashboard-loading"><i className="ph ph-spinner animate-spin"></i> Loading events…</div>
+          ) : upcomingEvents.length ? (
+            <div className="upcoming-event-list">
+              {upcomingEvents.map((event, index) => (
+                <Link className="upcoming-event-row" to="/dashboard/events" key={event.id || event['Drive ID'] || `${event.title || event.Title}-${index}`}>
+                  <span className="upcoming-event-date">{showDate(event)}</span>
+                  <span className="upcoming-event-copy"><strong>{event.title || event.Title || 'IPCS event'}</strong><small>{event.type || event.Event || 'General event'}{(event.time || event['Time of the Event']) ? ` · ${event.time || event['Time of the Event']}` : ''}</small></span>
+                  <i className="ph ph-caret-right" aria-hidden="true"></i>
                 </Link>
               ))}
             </div>
-          </section>
-        </div>
+          ) : <div className="empty-panel-message"><i className="ph ph-calendar-blank"></i><strong>No upcoming events</strong><span>New branch events and placement drives will show here.</span></div>}
+        </section>
       </div>
-
-      <section className="dashboard-stat-grid" aria-label="Student summary">
-        {statCards.map((item) => (
-          <article className="dashboard-stat-card" key={item.label}>
-            <span className="dashboard-stat-icon" style={{ color: item.color, background: `${item.color}1a` }}><i className={`ph-fill ${item.icon}`}></i></span>
-            <div><strong><Counter target={Number(item.value) || 0} /></strong><span>{item.label}</span></div>
-          </article>
-        ))}
-      </section>
 
       <section className="portal-panel placement-progress-panel">
         <div className="panel-heading"><span className="panel-heading-icon"><i className="ph ph-trend-up"></i></span><div><h2>Placement progress</h2><p>Your application activity at a glance</p></div></div>
+        <div className="dashboard-progress-stat-grid" aria-label="Student summary">
+          {statCards.map((item) => (
+            <article className="dashboard-progress-stat" key={item.label}>
+              <span className="dashboard-stat-icon" style={{ color: item.color, background: `${item.color}1a` }}><i className={`ph-fill ${item.icon}`}></i></span>
+              <div><strong><Counter target={Number(item.value) || 0} /></strong><span>{item.label}</span></div>
+            </article>
+          ))}
+        </div>
         <div className="placement-progress-list">
           <div><span>Applications</span><strong>{stats.applied || 0}</strong></div>
           <div className="placement-progress-track"><span style={{ width: `${stats.applied ? 100 : 0}%` }}></span></div>
@@ -181,16 +176,21 @@ export default function DashboardHome() {
         <Link className="panel-link" to="/dashboard/status">View application history <i className="ph ph-arrow-right"></i></Link>
       </section>
 
-      <section className="gamepal-hero dashboard-workout-reminder">
-        <div className="gamepal-hero-copy">
-          <p className="eyebrow">Your personal routine · {new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }).format(currentDate)}</p>
-          <h2>{workoutCompleted >= workoutPlanned ? `You showed up today, ${firstName}.` : `A fresh start, ${firstName}.`}</h2>
-          <p>{workoutCompleted >= workoutPlanned ? 'Your focus sessions are complete for today. Keep your streak moving tomorrow.' : 'Take a few minutes for a focused brain workout. Your routine adapts as you play.'}</p>
-          <Link className="gamepal-primary-action" to="/dashboard/gamepal"><i className="ph-fill ph-play"></i> {workoutCompleted ? 'Continue today’s workout' : 'Start today’s workout'}</Link>
+      <section className="dashboard-gamepal-card">
+        <div className="dashboard-gamepal-copy">
+          <p className="dashboard-gamepal-kicker"><i className="ph-fill ph-game-controller"></i> GamePal <span>·</span> a quick brain break</p>
+          <h2>Give your mind a fresh challenge.</h2>
+          <p>Build focus one short game at a time. Your daily routine is ready whenever you are.</p>
+          <Link className="dashboard-gamepal-cta" to="/dashboard/gamepal">{workoutCompleted ? 'Pick up today’s challenge' : 'Start a quick workout'} <i className="ph ph-arrow-up-right"></i></Link>
         </div>
-        <div className="gamepal-hero-score">
-          <span className="gamepal-score-ring"><strong>{gamepalStats ? Number(gamepalStats.overallScore) || 0 : '—'}</strong><small>Brain score</small></span>
-          <span className="gamepal-workout-count">{workoutCompleted}<i>/</i>{workoutPlanned} sessions today</span>
+        <div className="dashboard-gamepal-art" aria-hidden="true">
+          <span className="dashboard-gamepal-orbit orbit-one"></span><span className="dashboard-gamepal-orbit orbit-two"></span>
+          <span className="dashboard-gamepal-brain"><i className="ph-fill ph-brain"></i><b>+1</b></span>
+        </div>
+        <div className="dashboard-gamepal-summary">
+          <div><span>Brain score</span><strong>{gamepalStats ? Number(gamepalStats.overallScore) || 0 : '—'}</strong></div>
+          <div><span>Day streak</span><strong>{gamepalStats ? Number(gamepalStats.currentStreak) || 0 : '—'} <small>days</small></strong></div>
+          <div className="dashboard-gamepal-today"><span>Today’s warm-up</span><strong>{workoutCompleted}<small> / {workoutPlanned} rounds</small></strong><span className="dashboard-gamepal-progress"><i style={{ width: `${Math.min(100, Math.round((workoutCompleted / workoutPlanned) * 100))}%` }}></i></span></div>
         </div>
       </section>
     </div>

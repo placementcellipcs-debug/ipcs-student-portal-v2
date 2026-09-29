@@ -121,6 +121,9 @@ export default function Login() {
       <div className="login-ambient-orb login-ambient-orb-one" aria-hidden="true"></div>
       <div className="login-ambient-orb login-ambient-orb-two" aria-hidden="true"></div>
       <div className="login-grid-glow" aria-hidden="true"></div>
+      <span className="login-floating-shape login-floating-shape-ring" aria-hidden="true"></span>
+      <span className="login-floating-shape login-floating-shape-diamond" aria-hidden="true"></span>
+      <span className="login-floating-shape login-floating-shape-spark" aria-hidden="true"></span>
 
       <div className="landing-nav">
         <img className="login-brand-animate" src={ipcsGlobalLogo} alt="IPCS Global" style={{ height: '50px', objectFit: 'contain' }} />

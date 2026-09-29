@@ -1425,9 +1425,9 @@ select { cursor: pointer; }
 }
 
 /* Job opening cards and details modal */
-.company-logo-frame { display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; border: 1px solid var(--card-border); border-radius: 14px; background: #fff; color: #64748b; }
+.company-logo-frame { display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; border: 1px solid var(--card-border); border-radius: 14px; background: color-mix(in srgb, var(--input-bg) 84%, var(--accent-blue)); color: var(--accent-cyan); }
 .company-logo-frame img { display: block; width: 100%; height: 100%; padding: 5px; object-fit: contain; }
-.company-logo-frame > i { font-size: 1.35rem; }
+.company-logo-frame > i { font-size: 1.35rem; opacity: .9; }
 .vacancy-title-row { display: flex; align-items: center; gap: 11px; min-width: 0; margin: 13px 0 10px; }
 .vacancy-title-row .vacancy-company-logo { width: 42px; height: 42px; border-radius: 12px; }
 .vacancy-title-row .vacancy-title-block { min-width: 0; margin: 0; }

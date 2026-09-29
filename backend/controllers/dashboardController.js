@@ -187,6 +187,8 @@ const getDashboardData = async (req, res) => {
         let vacancies = [];
         const cleanStudentSubcourse = (userInfo.course || "").trim().toLowerCase();
         const studentMainCourse = courseMap[cleanStudentSubcourse] || cleanStudentSubcourse;
+        const newsletterHeaders = (nlData[0] || []).map((header) => normalize(header));
+        const logoColumn = newsletterHeaders.findIndex((header) => /^(company\s*)?logo(\s*(url|link))?$/.test(header));
 
         for (let i = 1; vacancyAccess && i < nlData.length; i++) {
             let status = (nlData[i][18] || "yes").toLowerCase();
@@ -204,7 +206,8 @@ const getDashboardData = async (req, res) => {
             let position = nlData[i][5] || "Technical Role";
             if (!company && !position) continue;
 
-            vacancies.push({ date: nlData[i][1] || "", company, companyLogo: nlData[i][22] || "", position, state: nlData[i][6] || "OTHER STATES", location: nlData[i][7] || "Multiple Locations", modeOfWork: nlData[i][8] || "On-site", openings: nlData[i][9] || "01-02", qualification: nlData[i][10] || "Degree", description: nlData[i][11] || "", experience: nlData[i][12] || "Fresher", salary: nlData[i][13] || "Market Standard", interviewDate: nlData[i][15] || "Will inform once scheduled", lastDate: nlData[i][16] || "Open", course: nlData[i][4] || "All", newsletterId: nlData[i][19] || nlData[i][20] || `JOB-${1000 + i}` });
+            const logoValue = nlData[i][logoColumn >= 0 ? logoColumn : 22];
+            vacancies.push({ date: nlData[i][1] || "", company, companyLogo: typeof logoValue === 'string' ? logoValue.trim() : "", position, state: nlData[i][6] || "OTHER STATES", location: nlData[i][7] || "Multiple Locations", modeOfWork: nlData[i][8] || "On-site", openings: nlData[i][9] || "01-02", qualification: nlData[i][10] || "Degree", description: nlData[i][11] || "", experience: nlData[i][12] || "Fresher", salary: nlData[i][13] || "Market Standard", interviewDate: nlData[i][15] || "Will inform once scheduled", lastDate: nlData[i][16] || "Open", course: nlData[i][4] || "All", newsletterId: nlData[i][19] || nlData[i][20] || `JOB-${1000 + i}` });
         }
 
         // Process TPO Info

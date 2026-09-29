@@ -1,5 +1,5 @@
 export const getDriveImageCandidates = (source) => {
-  const value = String(source || '').trim();
+  const value = String(source || '').trim().replace(/&amp;/gi, '&');
   if (!value || value === 'N/A') return [];
   if (/^(data:image\/|blob:)/i.test(value)) return [value];
   let cacheVersion = '';
@@ -18,15 +18,25 @@ export const getDriveImageCandidates = (source) => {
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}v=${encodeURIComponent(cacheVersion)}`;
   };
-  const match = value.match(/(?:[?&]id=|\/d\/)([\w-]+)/i);
+  let id = '';
+  try {
+    const parsed = new URL(value, window.location.origin);
+    if (/drive\.google\.com$|drive\.usercontent\.google\.com$/i.test(parsed.hostname)) {
+      id = parsed.searchParams.get('id') || '';
+      if (!id) id = parsed.pathname.match(/\/d\/([\w-]+)/i)?.[1] || '';
+    }
+  } catch {
+    // The fallback patterns below also support IDs pasted without a full URL.
+  }
+  const isDriveUrl = /(?:drive\.google\.com|drive\.usercontent\.google\.com|googleusercontent\.com)/i.test(value);
+  const match = isDriveUrl ? value.match(/(?:[?&]id=|\/d\/)([\w-]+)/i) : null;
   const looksLikeId = /^[\w-]{20,}$/.test(value);
-  const id = match?.[1] || (looksLikeId ? value : '');
+  id ||= match?.[1] || (looksLikeId ? value : '');
   if (!id) return [value];
   return [
-    `https://drive.google.com/thumbnail?id=${id}&sz=w1000`,
     `https://lh3.googleusercontent.com/d/${id}=w1000`,
     `https://drive.google.com/uc?export=view&id=${id}`,
+    `https://drive.google.com/thumbnail?id=${id}&sz=w1000`,
     `https://drive.usercontent.google.com/download?id=${id}&export=view&authuser=0`,
-    value,
   ].map(withCacheVersion).filter((url, index, items) => items.indexOf(url) === index);
 };

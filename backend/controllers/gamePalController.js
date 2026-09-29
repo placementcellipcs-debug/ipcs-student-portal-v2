@@ -12,14 +12,22 @@ const getFriendChallenges = async (req, res) => {
         const spreadsheetId = gamePalSpreadsheetId();
         await DatabaseService.ensureWorksheetWithHeaders('GamePal_Challenges', FRIEND_HEADERS, spreadsheetId);
         const rows = await DatabaseService.getSheetData('GamePal_Challenges!A:N', spreadsheetId, 10);
-        const challenges = rows.slice(1).filter((row) => [row[5], row[7]].some((owner) => String(owner || '').trim().toLowerCase() === email)).map((row) => ({
-            id: row[0], createdAt: row[1], gameId: row[3], gameName: row[4],
-            creatorEmail: String(row[5] || '').toLowerCase(), creatorName: row[6],
-            opponentEmail: String(row[7] || '').toLowerCase(), opponentName: row[8],
-            creatorScore: row[9] === '' || row[9] == null ? null : Number(row[9]), creatorAccuracy: Number(row[10]) || 0,
-            opponentScore: row[11] === '' || row[11] == null ? null : Number(row[11]), opponentAccuracy: Number(row[12]) || 0,
-            status: row[13] || 'Waiting for friend',
-        })).reverse();
+        const challenges = rows.slice(1).filter((row) => [row[5], row[7]].some((owner) => String(owner || '').trim().toLowerCase() === email)).map((row) => {
+            const creatorEmail = String(row[5] || '').trim().toLowerCase();
+            const opponentEmail = String(row[7] || '').trim().toLowerCase();
+            const creatorScore = row[9] === '' || row[9] == null ? null : Number(row[9]);
+            const opponentScore = row[11] === '' || row[11] == null ? null : Number(row[11]);
+            const winnerEmail = creatorScore === null || opponentScore === null || creatorScore === opponentScore
+                ? ''
+                : creatorScore > opponentScore ? creatorEmail : opponentEmail;
+            return {
+                id: row[0], createdAt: row[1], gameId: row[3], gameName: row[4],
+                creatorEmail, creatorName: row[6], opponentEmail, opponentName: row[8],
+                creatorScore, creatorAccuracy: Number(row[10]) || 0,
+                opponentScore, opponentAccuracy: Number(row[12]) || 0,
+                winnerEmail, status: row[13] || 'Waiting for friend',
+            };
+        }).reverse();
         return res.status(200).json({ success: true, challenges });
     } catch (error) {
         console.error('GamePal friend challenges load failed:', error.message);
@@ -82,7 +90,10 @@ const submitFriendChallengeScore = async (req, res) => {
         row[13] = creatorScore === null || opponentScore === null ? 'Waiting for friend' : 'Complete';
         await DatabaseService.updateRow(`GamePal_Challenges!A${rowIndex + 1}:N${rowIndex + 1}`, FRIEND_HEADERS.map((_, index) => row[index] ?? ''), spreadsheetId);
         const winner = creatorScore === null || opponentScore === null ? null : creatorScore === opponentScore ? 'Tie' : creatorScore > opponentScore ? row[6] : row[8];
-        return res.status(200).json({ success: true, status: row[13], winner, creatorScore, opponentScore });
+        const winnerEmail = creatorScore === null || opponentScore === null || creatorScore === opponentScore
+            ? ''
+            : creatorScore > opponentScore ? String(row[5] || '').trim().toLowerCase() : String(row[7] || '').trim().toLowerCase();
+        return res.status(200).json({ success: true, status: row[13], winner, winnerEmail, creatorScore, opponentScore });
     } catch (error) {
         console.error('GamePal friend challenge score failed:', error.message);
         return res.status(503).json({ success: false, message: 'Could not save the challenge score.' });

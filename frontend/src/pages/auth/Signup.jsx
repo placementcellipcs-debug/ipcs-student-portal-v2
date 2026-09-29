@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Cropper from 'react-easy-crop';
 import api from '../../config/axios';
 import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
+import ModalPortal from '../../components/ui/ModalPortal';
 
 
 const sanitizePhoneNumber = (val) => {
@@ -370,6 +371,7 @@ export default function Signup() {
       </div>
 
       {showCropModal && (
+        <ModalPortal>
         <div className="report-modal-overlay">
           <div className="report-card" style={{ maxWidth: '400px', textAlign: 'center' }}>
             <div className="modal-header-border">
@@ -394,9 +396,11 @@ export default function Signup() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {showTncModal && (
+        <ModalPortal>
         <div className="report-modal-overlay">
           <div className="report-card" style={{ maxWidth: '650px' }}>
             <div className="modal-header-border">
@@ -419,6 +423,7 @@ export default function Signup() {
             )}
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

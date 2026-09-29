@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import CognitiveMiniGame from './CognitiveMiniGame';
 import ReferenceMiniGame from './ReferenceMiniGames';
 import DriveImage from '../../components/ui/DriveImage';
+import ModalPortal from '../../components/ui/ModalPortal';
 
 const CATEGORIES = ['Memory', 'Attention', 'Language', 'Math', 'Problem Solving', 'Flexibility', 'Speed'];
 const GAMES = [
@@ -44,10 +45,48 @@ export default function GamePalHub() {
   const [completedToday, setCompletedToday] = useState([]);
   const [loading, setLoading] = useState(() => Boolean(user?.email));
   const [message, setMessage] = useState('');
+  const [challengeCelebration, setChallengeCelebration] = useState(null);
 
   const firstName = cleanName(user?.name);
   const preferenceKey = `talenzo_gamepal_goals_${user?.email || 'student'}`;
   const completionKey = `talenzo_gamepal_daily_${user?.email || 'student'}_${indiaDateKey()}`;
+  const seenChallengesKey = `talenzo_gamepal_seen_challenges_${user?.email || 'student'}`;
+
+  const celebrateChallenge = useCallback((challenge) => {
+    if (!challenge?.id || challenge.status !== 'Complete') return false;
+    let seenIds = [];
+    try {
+      const savedIds = JSON.parse(localStorage.getItem(seenChallengesKey) || '[]');
+      if (Array.isArray(savedIds)) seenIds = savedIds;
+    } catch { /* Use an empty seen list when storage is unavailable. */ }
+    if (seenIds.includes(challenge.id)) return false;
+    try { localStorage.setItem(seenChallengesKey, JSON.stringify([...seenIds.slice(-199), challenge.id])); } catch { /* The celebration still works for this visit. */ }
+
+    const email = String(user?.email || '').trim().toLowerCase();
+    const isCreator = String(challenge.creatorEmail || '').trim().toLowerCase() === email;
+    const myScore = Number(isCreator ? challenge.creatorScore : challenge.opponentScore);
+    const friendScore = Number(isCreator ? challenge.opponentScore : challenge.creatorScore);
+    const scoresValid = Number.isFinite(myScore) && Number.isFinite(friendScore);
+    const winnerEmail = challenge.winnerEmail || (!scoresValid || myScore === friendScore
+      ? ''
+      : myScore > friendScore ? email : (isCreator ? challenge.opponentEmail : challenge.creatorEmail));
+    const outcome = !winnerEmail ? 'tie' : String(winnerEmail).trim().toLowerCase() === email ? 'win' : 'loss';
+    setChallengeCelebration({
+      id: challenge.id,
+      outcome,
+      gameName: challenge.gameName || 'GamePal challenge',
+      friendName: isCreator ? challenge.opponentName : challenge.creatorName,
+      myScore: scoresValid ? myScore : 0,
+      friendScore: scoresValid ? friendScore : 0,
+    });
+    return true;
+  }, [seenChallengesKey, user?.email]);
+
+  const announceUnseenChallenges = useCallback((challenges) => {
+    for (const challenge of challenges) {
+      if (celebrateChallenge(challenge)) break;
+    }
+  }, [celebrateChallenge]);
 
   useEffect(() => {
     if (!user?.email) return undefined;
@@ -71,17 +110,27 @@ export default function GamePalHub() {
     if (!user?.email || activeTab !== 'Play with friends') return undefined;
     let cancelled = false;
     const loadChallenges = () => api.get('/api/gamepal/friends')
-      .then((res) => { if (!cancelled && res.data.success) setFriendChallenges(res.data.challenges || []); })
+      .then((res) => {
+        if (!cancelled && res.data.success) {
+          const challenges = res.data.challenges || [];
+          setFriendChallenges(challenges);
+          announceUnseenChallenges(challenges);
+        }
+      })
       .catch((error) => { if (!cancelled) setMessage(error.response?.data?.message || 'Could not load friend challenges.'); });
     loadChallenges();
     const interval = window.setInterval(loadChallenges, 30_000);
     return () => { cancelled = true; window.clearInterval(interval); };
-  }, [user?.email, activeTab]);
+  }, [user?.email, activeTab, announceUnseenChallenges]);
 
-  const refreshFriendChallenges = async () => {
+  const refreshFriendChallenges = useCallback(async () => {
     const response = await api.get('/api/gamepal/friends');
-    if (response.data.success) setFriendChallenges(response.data.challenges || []);
-  };
+    if (response.data.success) {
+      const challenges = response.data.challenges || [];
+      setFriendChallenges(challenges);
+      announceUnseenChallenges(challenges);
+    }
+  }, [announceUnseenChallenges]);
 
   const createFriendChallenge = async (event) => {
     event.preventDefault();
@@ -162,6 +211,7 @@ export default function GamePalHub() {
           challengeStatus = result.status === 'Complete'
             ? result.winner === 'Tie' ? ' Friend challenge tied.' : ` ${result.winner} won the friend challenge.`
             : ' Your score is saved; waiting for your friend.';
+          if (result.status === 'Complete') celebrateChallenge({ ...activeChallenge, ...result });
           await refreshFriendChallenges();
         } catch (challengeError) {
           challengeStatus = ` Your game was saved, but its challenge score could not sync: ${challengeError.response?.data?.message || challengeError.message}`;
@@ -277,13 +327,30 @@ export default function GamePalHub() {
 
       {activeTab === 'Progress' && (
         <section className="gamepal-progress-layout">
-          <article className="gamepal-progress-overview"><p className="eyebrow">Your performance</p><h2>{overall}</h2><p>Overall brain score</p><div className="gamepal-progress-stats"><div><strong>{stats.currentStreak || 0}</strong><span>day streak</span></div><div><strong>{stats.lastPlayedDate === 'Never' ? '—' : stats.lastPlayedDate}</strong><span>last session</span></div></div></article>
-          <article className="gamepal-skills-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Seven areas</p><h2>Skill breakdown</h2></div></div>{CATEGORIES.map((category) => { const score = categoryScore(stats, category); const percentage = Math.min(100, Math.max(0, score / 2)); const game = GAMES.find((item) => item.category === category); return <div className="gamepal-skill-row" key={category}><div><span><i className={`ph ${game.icon}`} style={{ color: game.tint }}></i>{category}</span><strong>{score}</strong></div><div className="gamepal-skill-track"><span style={{ width: `${percentage}%`, background: game.tint }}></span></div></div>; })}</article>
-          <article className="gamepal-history-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Your game-by-game records</p><h2>Scores and levels</h2></div></div>{GAMES.map((game) => { const record = stats.games?.[game.name]; return <div className="gamepal-skill-row" key={game.id}><div><span><i className={`ph ${game.icon}`} style={{ color: game.tint }}></i>{game.name}</span><strong>{record ? `${record.bestScore} pts · Lv ${record.level}` : 'Not played'}</strong></div><div className="gamepal-skill-track"><span style={{ width: `${Math.min(100, (record?.bestScore || 0) / 3)}%`, background: game.tint }}></span></div></div>; })}</article>
+          <header className="gamepal-progress-intro"><div><p className="eyebrow">Your training dashboard</p><h2>Every session builds a stronger streak.</h2><p>Track focus areas, level up your games, and celebrate the work you put in.</p></div><span><i className="ph-fill ph-sparkle"></i> PLAYER STATS</span></header>
+          <article className="gamepal-progress-overview"><p className="eyebrow">Your performance</p><div className="gamepal-progress-score-ring" style={{ '--brain-score-progress': `${Math.min(100, Math.max(0, overall / 20))}%` }}><div><strong>{overall}</strong><small>Brain score</small></div></div><p>Practice is how your score grows.</p><div className="gamepal-progress-stats"><div><strong>{stats.currentStreak || 0}</strong><span>day streak</span></div><div><strong>{stats.lastPlayedDate === 'Never' ? '—' : stats.lastPlayedDate}</strong><span>last session</span></div></div></article>
+          <article className="gamepal-skills-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Seven areas</p><h2>Skill breakdown</h2></div><span>XP earned</span></div>{CATEGORIES.map((category) => { const score = categoryScore(stats, category); const percentage = Math.min(100, Math.max(0, score / 20)); const game = GAMES.find((item) => item.category === category); return <div className="gamepal-skill-row" key={category}><div><span><i className={`ph ${game.icon}`} style={{ color: game.tint }}></i>{category}</span><strong>{score.toLocaleString()} XP <small style={{ color: game.tint }}>{percentage}%</small></strong></div><div className="gamepal-skill-track" style={{ '--skill-tint': game.tint }} role="progressbar" aria-label={`${category} progress`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={percentage}><span style={{ width: `${percentage}%` }}><i></i></span></div></div>; })}</article>
+          <article className="gamepal-history-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Your game-by-game records</p><h2>Scores and levels</h2></div></div>{GAMES.map((game) => { const record = stats.games?.[game.name]; const scorePercent = Math.min(100, Math.max(0, (record?.bestScore || 0) / 3)); return <div className="gamepal-skill-row" key={game.id}><div><span><i className={`ph ${game.icon}`} style={{ color: game.tint }}></i>{game.name}</span><strong>{record ? `${record.bestScore} pts · Lv ${record.level}` : 'Not played'}</strong></div><div className="gamepal-skill-track" style={{ '--skill-tint': game.tint }} role="progressbar" aria-label={`${game.name} best-score progress`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={scorePercent}><span style={{ width: `${scorePercent}%` }}><i></i></span></div></div>; })}</article>
           <article className="gamepal-history-panel"><div className="gamepal-section-heading"><div><p className="eyebrow">Your recent sessions</p><h2>Practice history</h2></div><span>{recentSessions.length} saved</span></div>{recentSessions.length ? <div className="gamepal-history-list">{recentSessions.slice(0, 8).map((session, index) => { const game = GAMES.find((item) => item.name === session.gameName); const accuracy = Number.parseInt(session.accuracy, 10) || 0; return <div className="gamepal-history-entry" key={`${session.date}-${session.gameName}-${index}`}><span className="gamepal-history-icon" style={{ color: game?.tint || 'var(--accent-cyan)' }}><i className={`ph-fill ${game?.icon || 'ph-game-controller'}`}></i></span><div className="gamepal-history-copy"><strong>{session.gameName}</strong><span>{session.category} · {session.date || 'Session'}</span></div><div className="gamepal-history-result"><strong>{session.score} pts</strong><span>{accuracy}% accuracy</span></div><div className="gamepal-history-track"><i style={{ width: `${Math.min(100, Math.max(4, accuracy))}%`, background: game?.tint || 'var(--accent-cyan)' }}></i></div></div>; })}</div> : <p className="gamepal-history-empty">Finish your first mini-game and your recent practice will show up here.</p>}</article>
         </section>
       )}
       <p className="gamepal-disclaimer">GamePal is for learning and everyday cognitive practice. Scores describe your GamePal sessions and are not medical assessments.</p>
+
+      {challengeCelebration && (
+        <ModalPortal>
+          <div className={`gamepal-result-overlay outcome-${challengeCelebration.outcome}`} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setChallengeCelebration(null); }}>
+            <div className="gamepal-result-particles" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 7) * -0.31}s`, '--particle-drift': `${((index * 29) % 100) - 50}px` }}></i>)}</div>
+            <section className="gamepal-result-card" role="dialog" aria-modal="true" aria-labelledby="gamepal-result-title">
+              <span className="gamepal-result-emblem" aria-hidden="true">{challengeCelebration.outcome === 'win' ? '🏆' : challengeCelebration.outcome === 'loss' ? '🎮' : '🤝'}</span>
+              <p className="eyebrow">{challengeCelebration.gameName} · head-to-head</p>
+              <h2 id="gamepal-result-title">{challengeCelebration.outcome === 'win' ? 'Victory!' : challengeCelebration.outcome === 'loss' ? 'Good game!' : 'It’s a tie!'}</h2>
+              <p className="gamepal-result-message">{challengeCelebration.outcome === 'win' ? `You beat ${challengeCelebration.friendName || 'your friend'}—that was a brilliant round.` : challengeCelebration.outcome === 'loss' ? `${challengeCelebration.friendName || 'Your friend'} edged ahead this time. Every round is a chance to level up.` : `You and ${challengeCelebration.friendName || 'your friend'} matched scores. Run it back for the tiebreaker.`}</p>
+              <div className="gamepal-result-scoreboard"><div><span>You</span><strong>{challengeCelebration.myScore}</strong></div><i>VS</i><div><span>{challengeCelebration.friendName || 'Friend'}</span><strong>{challengeCelebration.friendScore}</strong></div></div>
+              <button type="button" className="gamepal-primary-action" onClick={() => setChallengeCelebration(null)}>Back to challenges <i className="ph ph-arrow-right"></i></button>
+            </section>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 }

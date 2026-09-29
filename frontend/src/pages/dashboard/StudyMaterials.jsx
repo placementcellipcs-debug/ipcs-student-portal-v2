@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import ModalPortal from '../../components/ui/ModalPortal';
 
 export default function StudyMaterials() {
   const { user } = useOutletContext();
@@ -118,6 +119,7 @@ export default function StudyMaterials() {
 
       {/* SECURE MATERIAL VIEWER MODAL */}
       {materialModal && (
+        <ModalPortal>
         <div className="report-modal-overlay">
           <div 
             className="material-viewer-card"
@@ -166,6 +168,7 @@ export default function StudyMaterials() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )} 
     </div>
   );

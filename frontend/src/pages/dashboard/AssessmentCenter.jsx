@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import ModalPortal from '../../components/ui/ModalPortal';
 
 export default function AssessmentCenter() {
   const { user } = useOutletContext();
@@ -327,6 +328,7 @@ export default function AssessmentCenter() {
 
       {/* 5. REVIEW MODAL & STUDY SHEET */}
       {viewingResult && (
+        <ModalPortal>
         <div className="report-modal-overlay" style={{ zIndex: 99999 }}>
           <div className="report-card" style={{ maxWidth: '450px', textAlign: 'center', padding: '3rem 2rem' }}>
              <i className="ph ph-x" style={{ position: 'absolute', top: '20px', right: '20px', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.5rem' }} onClick={() => setViewingResult(null)}></i>
@@ -353,6 +355,7 @@ export default function AssessmentCenter() {
              <button className="btn-cancel" style={{ width: '100%', padding: '1.2rem', fontSize: '1rem' }} onClick={() => setViewingResult(null)}>Dismiss</button>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* REVIEW ENGINE UI */}

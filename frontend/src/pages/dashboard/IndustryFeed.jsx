@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../config/axios';
+import ModalPortal from '../../components/ui/ModalPortal';
 
 const DEFAULT_TOPICS = [
   { id: 'all', label: 'For you' },
@@ -162,6 +163,7 @@ export default function IndustryFeed() {
       <p className="career-hub-note"><i className="ph ph-info"></i> Headlines and summaries stay in the portal. Government and employment policy items include official PIB updates; confirm any rule with the original government notice before acting.</p>
 
       {selectedArticle && (
+        <ModalPortal>
         <div className="career-hub-reader-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedArticle(null); }}>
           <section className="career-hub-reader" role="dialog" aria-modal="true" aria-labelledby="career-hub-reader-title">
             <button type="button" className="career-hub-reader-close" onClick={() => setSelectedArticle(null)} aria-label="Close story"><i className="ph ph-x"></i></button>
@@ -172,6 +174,7 @@ export default function IndustryFeed() {
             <div className="career-hub-reader-footer"><span>Publisher: {selectedArticle.publisher}</span><div><button type="button" className={savedIds.includes(selectedArticle.id) ? 'saved' : ''} onClick={() => toggleSaved(selectedArticle)}><i className={`ph-${savedIds.includes(selectedArticle.id) ? 'fill' : 'regular'} ph-bookmark-simple`}></i>{savedIds.includes(selectedArticle.id) ? 'Saved' : 'Save for later'}</button><a href={selectedArticle.url} target="_blank" rel="noreferrer" referrerPolicy="no-referrer">Read full story <i className="ph ph-arrow-square-out"></i></a></div></div>
           </section>
         </div>
+        </ModalPortal>
       )}
     </main>
   );

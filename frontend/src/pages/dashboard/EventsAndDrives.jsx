@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../../components/ui/DriveImage';
+import ModalPortal from '../../components/ui/ModalPortal';
 
 const parseSafeDate = (dateStr) => {
   if (!dateStr || dateStr === "N/A" || dateStr === "undefined" || String(dateStr).toUpperCase() === "TBA") return null;
@@ -208,6 +209,7 @@ export default function EventsAndDrives() {
 
       {/* EVENT MODAL */}
       {eventModal && (
+        <ModalPortal>
         <div className="report-modal-overlay event-modal-overlay" onClick={() => setEventModal(null)}>
            <div className="report-card event-modal-card" role="dialog" aria-modal="true" aria-labelledby="event-modal-title" onClick={(event) => event.stopPropagation()}>
               <div className="event-modal-header">
@@ -286,6 +288,7 @@ export default function EventsAndDrives() {
               </div>
            </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

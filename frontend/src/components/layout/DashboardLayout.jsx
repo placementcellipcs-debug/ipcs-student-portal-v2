@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../ui/DriveImage';
+import ModalPortal from '../ui/ModalPortal';
 import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
 
 const COVER_BANNER_URL = 'https://lh3.googleusercontent.com/d/1eiP135HOsuG3MEaEplNblmcLewjnKXp6';
@@ -487,6 +488,7 @@ export default function DashboardLayout() {
       </main>
 
       {drivePopup && (
+        <ModalPortal>
         <div className="report-modal-overlay drive-reminder-overlay" role="presentation">
           <section className="report-card drive-reminder-card" role="dialog" aria-modal="true" aria-labelledby="drive-reminder-title">
             <div className="drive-reminder-icon"><i className="ph-fill ph-megaphone"></i></div>
@@ -507,6 +509,7 @@ export default function DashboardLayout() {
             </div>
           </section>
         </div>
+        </ModalPortal>
       )}
 
       <div className={`drawer-overlay ${drawerOpen ? 'open' : ''}`} aria-hidden={!drawerOpen} inert={!drawerOpen} onClick={(event) => { if (event.target === event.currentTarget) setDrawerOpen(false); }}>

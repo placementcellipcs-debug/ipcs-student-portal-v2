@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../../components/ui/DriveImage';
+import ModalPortal from '../../components/ui/ModalPortal';
 
 const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -233,6 +234,7 @@ export default function StudentProfile() {
 
       {/* EDIT PROFILE MODAL */}
       {editModal && (
+        <ModalPortal>
         <div className="report-modal-overlay">
           <div className="report-card" style={{ maxWidth: '750px', padding: '3rem' }}>
             <div className="modal-header-border">
@@ -271,6 +273,7 @@ export default function StudentProfile() {
             {epStatus && <div className={`alert alert-${epStatus.type}`} style={{marginTop: '15px'}}>{epStatus.message}</div>}
           </div>
         </div>
+        </ModalPortal>
       )}
 
     </div>

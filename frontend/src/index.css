@@ -1380,6 +1380,96 @@ select { cursor: pointer; }
   .gamepal-game-card, .cognitive-game-options button, .cognitive-game-progress span, .gamepal-skill-track > span { transition: none !important; }
 }
 
+/* GamePal session results and pass-and-play boards */
+.gamepal-run-score-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 0 0 13px; }
+.gamepal-run-score-grid > div { display: grid; gap: 6px; min-width: 0; padding: 12px 7px; border: 1px solid var(--card-border); border-radius: 13px; background: color-mix(in srgb,var(--input-bg) 82%,var(--card-bg)); }
+.gamepal-run-score-grid span { color: var(--text-muted); font-size: .52rem; font-weight: 850; letter-spacing: .07em; }
+.gamepal-run-score-grid strong { color: var(--text-main); font-size: clamp(1rem,4vw,1.35rem); }
+.gamepal-result-save-note { min-height: 20px; margin: 0 0 14px; color: var(--text-muted); font-size: .67rem; }
+.gamepal-duel-form { background: radial-gradient(circle at 96% 0,rgba(192,132,252,.13),transparent 35%), color-mix(in srgb,var(--input-bg) 38%,var(--card-bg)); }
+.gamepal-friend-email { width: 100%; min-height: 42px; margin-top: 8px; padding: 9px 11px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card-bg); color: var(--text-main); font: inherit; font-size: .75rem; }
+.gamepal-duel-form .gamepal-room-form-icon { border-color: rgba(192,132,252,.3); background: rgba(192,132,252,.12); color: #c084fc; }
+.gamepal-duel-form .gamepal-primary-action { width: 100%; justify-content: center; margin-top: 16px; }
+.board-game-screen { min-height: 100dvh; padding-bottom: max(24px,env(safe-area-inset-bottom)); background: radial-gradient(ellipse at 50% 0,color-mix(in srgb,var(--accent-cyan) 8%,transparent),transparent 48%),var(--page-bg); }
+.board-game-wrap { width: min(100% - 28px,960px); margin: 22px auto 0; }
+.board-turn-banner { display: flex; align-items: center; gap: 11px; width: fit-content; max-width: 100%; margin: 0 auto 14px; padding: 9px 14px; border: 1px solid color-mix(in srgb,var(--turn-tint) 40%,var(--card-border)); border-radius: 14px; background: color-mix(in srgb,var(--turn-tint) 10%,var(--card-bg)); box-shadow: 0 10px 28px rgba(0,0,0,.14); }
+.board-turn-dot { width: 11px; height: 11px; flex: 0 0 auto; border-radius: 50%; background: var(--turn-tint); box-shadow: 0 0 14px var(--turn-tint); }
+.board-turn-banner > div { display: grid; gap: 2px; }
+.board-turn-banner small,.board-player-picker > span { color: var(--text-muted); font-size: .53rem; font-weight: 900; letter-spacing: .12em; }
+.board-turn-banner strong { color: var(--text-main); font-size: .86rem; }
+.board-turn-caption { padding-left: 10px; border-left: 1px solid var(--card-border); color: var(--text-muted); font-size: .61rem; }
+.board-game-card { width: min(100%,840px); margin: 0 auto; padding: clamp(16px,3vw,26px); border: 1px solid var(--card-border); border-radius: 24px; background: radial-gradient(circle at 90% 0,color-mix(in srgb,var(--accent-cyan) 9%,transparent),transparent 35%),var(--card-bg); box-shadow: 0 24px 70px rgba(0,0,0,.24); }
+.board-game-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 17px; }
+.board-game-heading .eyebrow { margin: 0 0 5px; color: var(--accent-cyan); font-size: .61rem; font-weight: 900; letter-spacing: .12em; }
+.board-game-heading h1 { margin: 0; color: var(--text-main); font-size: clamp(1.25rem,4vw,1.9rem); letter-spacing: -.045em; }
+.board-game-heading p:not(.eyebrow) { max-width: 590px; margin: 6px 0 0; color: var(--text-muted); font-size: .72rem; line-height: 1.5; }
+.board-player-picker { display: flex; align-items: center; gap: 5px; padding: 5px; border: 1px solid var(--card-border); border-radius: 13px; background: var(--input-bg); }
+.board-player-picker > span { padding: 0 7px; white-space: nowrap; }
+.board-player-picker button { width: 31px; height: 31px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--text-muted); font: inherit; font-size: .7rem; font-weight: 850; cursor: pointer; }
+.board-player-picker button.active { border-color: color-mix(in srgb,var(--accent-cyan) 30%,transparent); background: color-mix(in srgb,var(--accent-cyan) 17%,var(--card-bg)); color: var(--accent-cyan); }
+.board-player-picker button:disabled { cursor: not-allowed; opacity: .55; }
+.ludo-board-wrap,.snakes-board-wrap { display: grid; place-items: center; padding: clamp(8px,2vw,16px); border: 1px solid var(--card-border); border-radius: 21px; background: linear-gradient(145deg,#0d1625,#131d2d); }
+.ludo-board { position: relative; display: grid; grid-template: repeat(16,1fr)/repeat(16,1fr); width: min(100%,620px); aspect-ratio: 1; overflow: hidden; border: 3px solid #28384d; border-radius: 15px; background: #e5eaf1; box-shadow: 0 15px 45px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.45); }
+.ludo-base { position: absolute; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 37.5%; height: 37.5%; border: 7px solid rgba(255,255,255,.84); border-radius: 15px; box-shadow: inset 0 0 0 1px rgba(10,20,32,.08); }
+.ludo-base strong { margin-bottom: 8px; color: rgba(12,22,34,.72); font-size: clamp(.42rem,1.6vw,.68rem); letter-spacing: .13em; }
+.ludo-base > div { display: grid; grid-template: repeat(2,1fr)/repeat(2,1fr); gap: clamp(7px,2vw,15px); width: 58%; aspect-ratio: 1; place-items: center; padding: 7px; border-radius: 12px; background: rgba(255,255,255,.81); }
+.ludo-base > div > span { width: 65%; aspect-ratio: 1; border: 3px solid rgba(255,255,255,.8); border-radius: 50%; background: var(--player); box-shadow: 0 2px 8px rgba(0,0,0,.24); }
+.base-ruby { top: 0; left: 0; background: #ffb7bd; }
+.base-azure { top: 0; right: 0; background: #a9d2ff; }
+.base-amber { right: 0; bottom: 0; background: #ffe0a1; }
+.base-jade { bottom: 0; left: 0; background: #9fe8cf; }
+.ludo-track-tile { z-index: 1; grid-row: var(--grid-row); grid-column: var(--grid-col); align-self: stretch; justify-self: stretch; margin: 1px; border: 1px solid #c5cfdb; background: #fff; box-shadow: inset 0 0 0 2px rgba(15,23,42,.025); }
+.ludo-track-tile.safe { background: #e5edfa; }
+.ludo-center { position: absolute; z-index: 2; top: 40.625%; left: 40.625%; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 18.75%; height: 18.75%; clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); background: conic-gradient(#4e9dff 0 25%,#f6b844 25% 50%,#42d6a4 50% 75%,#fb5c69 75%); color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.ludo-center i { font-size: clamp(1.05rem,4vw,2.1rem); }
+.ludo-center span { font-size: clamp(.35rem,1vw,.55rem); font-weight: 950; letter-spacing: .1em; }
+.ludo-token { z-index: 4; grid-row: var(--grid-row); grid-column: var(--grid-col); align-self: center; justify-self: center; display: grid; place-items: center; width: 70%; max-width: 27px; aspect-ratio: 1; padding: 0; border: 3px solid #fff; border-radius: 50%; background: var(--player); color: #142033; box-shadow: 0 3px 8px rgba(0,0,0,.4); font: inherit; font-size: clamp(.38rem,1.15vw,.62rem); font-weight: 950; cursor: default; transition: transform .2s ease,filter .2s ease; }
+.ludo-token.movable { cursor: pointer; animation: board-token-pulse .9s ease-in-out infinite alternate; }
+.ludo-token.movable:hover { z-index: 8; transform: scale(1.25); }
+@keyframes board-token-pulse { to { filter: brightness(1.18); box-shadow: 0 0 0 5px color-mix(in srgb,var(--player) 32%,transparent),0 4px 12px rgba(0,0,0,.45); } }
+.board-game-controls { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 14px 0; }
+.board-game-notice { flex: 1; min-height: 43px; display: flex; align-items: center; padding: 10px 13px; border: 1px solid var(--card-border); border-radius: 12px; background: var(--input-bg); color: var(--text-main); font-size: .7rem; line-height: 1.4; }
+.board-dice { display: grid; place-items: center; width: 72px; height: 67px; flex: 0 0 auto; gap: 1px; border: 1px solid color-mix(in srgb,var(--accent-cyan) 38%,var(--card-border)); border-radius: 15px; background: linear-gradient(145deg,color-mix(in srgb,var(--accent-cyan) 20%,var(--card-bg)),var(--input-bg)); color: var(--text-main); cursor: pointer; box-shadow: 0 8px 18px rgba(0,0,0,.18); }
+.board-dice > span { font-size: 1.55rem; font-weight: 900; line-height: 1; }
+.board-dice > small { color: var(--accent-cyan); font-size: .43rem; font-weight: 950; letter-spacing: .09em; }
+.board-dice:disabled { cursor: not-allowed; opacity: .68; }
+.board-dice.rolling > span { animation: board-dice-roll .42s ease-in-out infinite alternate; }
+@keyframes board-dice-roll { to { transform: rotate(180deg) scale(.82); } }
+.board-player-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.board-player-strip > div { display: grid; grid-template-columns: 12px minmax(0,1fr); align-items: center; column-gap: 7px; flex: 1 1 130px; min-width: 0; padding: 9px 10px; border: 1px solid var(--card-border); border-radius: 12px; background: color-mix(in srgb,var(--input-bg) 72%,var(--card-bg)); }
+.board-player-strip > div.active { border-color: color-mix(in srgb,var(--player) 45%,var(--card-border)); background: color-mix(in srgb,var(--player) 9%,var(--card-bg)); }
+.board-player-strip > div > span,.snakes-player-token { grid-row: span 2; width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.8); border-radius: 50%; background: var(--player); box-shadow: 0 0 8px color-mix(in srgb,var(--player) 50%,transparent); }
+.board-player-strip strong { overflow: hidden; color: var(--text-main); font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
+.board-player-strip small { color: var(--text-muted); font-size: .53rem; }
+.snakes-board { display: grid; grid-template: repeat(10,1fr)/repeat(10,1fr); width: min(100%,660px); aspect-ratio: 1; overflow: hidden; border: 2px solid #42536c; border-radius: 12px; box-shadow: 0 14px 38px rgba(0,0,0,.32); }
+.snakes-square { position: relative; display: flex; align-items: flex-start; justify-content: flex-start; min-width: 0; border: 1px solid rgba(32,48,67,.18); padding: 3px; color: #17283b; font-size: clamp(.48rem,1.4vw,.78rem); font-weight: 850; }
+.snakes-square.odd { background: #edf5ef; }
+.snakes-square.even { background: #dcebe0; }
+.snakes-square.snake-square { background: #ffdce0; }
+.snakes-square.ladder-square { background: #ffefbf; }
+.snakes-square.finish-square { background: linear-gradient(135deg,#f7cf66,#fff2bd); color: #6c4c08; }
+.snakes-square > small { position: absolute; right: 2px; bottom: 1px; font-size: clamp(.48rem,1.65vw,.9rem); line-height: 1; }
+.snakes-square > span { position: relative; z-index: 1; }
+.snakes-player-token { position: absolute; z-index: 2; right: 2px; bottom: 2px; width: clamp(8px,1.8vw,13px); height: clamp(8px,1.8vw,13px); border-width: 1px; }
+.cognitive-game-screen .special-game-card { min-height: 0; }
+.knife-wheel { will-change: transform; }
+.snow-course-item,.dino-obstacle { transition: top .18s linear,left .18s linear,transform .18s linear; will-change: top,left; }
+.dino-track { contain: layout paint; }
+@media (max-width:680px) {
+  .board-game-wrap { width: min(100% - 18px,960px); margin-top: 12px; }
+  .board-game-card { border-radius: 17px; }
+  .board-game-heading { flex-direction: column; gap: 11px; }
+  .board-turn-caption { display: none; }
+  .ludo-base { border-width: 3px; border-radius: 10px; }
+  .ludo-base > div { gap: 4px; padding: 4px; }
+  .board-game-controls { align-items: stretch; }
+  .board-dice { width: 65px; height: auto; min-height: 62px; }
+  .snakes-board-wrap { padding: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ludo-token.movable,.board-dice.rolling > span { animation: none; }
+}
+
 /* Final page-level sizing and accent controls. */
 .vacancy-card-grid .vacancy-card { padding: 16px; border-radius: 16px; }
 .vacancy-card-grid .vacancy-title-block { margin: 13px 0 10px; }
@@ -1869,4 +1959,25 @@ select { cursor: pointer; }
   .panel-heading-icon, .dashboard-stat-icon, .quick-link-icon, .portal-back-dashboard,
   .portal-back-dashboard > i { transition: none !important; }
   .gamepal-skill-track > span > i, .gamepal-result-particles > i, .gamepal-result-card, .gamepal-result-emblem { animation: none !important; }
+}
+
+.knife-wheel { animation: knife-wheel-spin var(--spin-duration,3.2s) linear infinite; }
+@keyframes knife-wheel-spin { to { transform: rotate(1turn); } }
+.gamepal-result-scoreboard { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.gamepal-run-result-card .gamepal-result-scoreboard { grid-template-columns: 1fr auto 1fr; }
+.gamepal-run-result-card .gamepal-group-standings { max-height: 180px; overflow-y: auto; margin: 0 0 13px; }
+.gamepal-run-result-card .gamepal-result-scoreboard { margin: 0 0 13px; }
+.snakes-board { position: relative; }
+.snakes-square > small { z-index: 1; }
+.ludo-base > div > span { display: block; }
+.snow-course-item { animation: snow-course-drop var(--fall-duration,6s) linear forwards; }
+.dino-obstacle { animation: dino-obstacle-travel var(--travel-duration,4s) linear forwards; }
+@keyframes snow-course-drop { to { top: 108%; } }
+@keyframes dino-obstacle-travel { to { left: -8%; } }
+@media (max-width:680px) {
+  .gamepal-room-setup-grid { grid-template-columns: 1fr; }
+  .board-player-strip > div { flex-basis: 120px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .knife-wheel,.snow-course-item,.dino-obstacle { animation: none; }
 }

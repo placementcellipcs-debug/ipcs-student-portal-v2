@@ -1,7 +1,14 @@
 import { useMemo, useState } from 'react';
 
 const SIZE = 6;
-const shuffle = (items) => [...items].sort(() => Math.random() - 0.5);
+const shuffle = (items) => {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swap]] = [result[swap], result[index]];
+  }
+  return result;
+};
 const finish = (game, onComplete, startedAt, score, accuracy) => onComplete(
   game.name,
   game.category,
@@ -9,6 +16,11 @@ const finish = (game, onComplete, startedAt, score, accuracy) => onComplete(
   Math.max(0, Math.min(100, Math.round(accuracy))),
   Math.max(1, Math.round((Date.now() - startedAt) / 1000)),
 );
+const puzzleScore = (startedAt, targetSeconds, penalties = 0) => {
+  const elapsed = Math.max(1, (Date.now() - startedAt) / 1000);
+  const speedBonus = Math.round(350 * Math.max(0, Math.min(1, 1 - elapsed / targetSeconds)));
+  return Math.max(100, 650 + speedBonus - penalties);
+};
 
 function GameFrame({ game, onExit, prompt, children }) {
   return (
@@ -36,9 +48,15 @@ const PINPOINT_PUZZLES = [
   { answer: 'planet', clues: ['Earth is one of these.', 'Some have rings around them.', 'They orbit a star.', 'Mars and Jupiter are examples.', 'What kind of object is it?'] },
   { answer: 'bridge', clues: ['This structure helps people cross a river.', 'A card game can use this word in its name.', 'It connects two sides.', 'It can be built from steel, stone, or wood.', 'What structure fits these clues?'] },
 ];
-const randomItem = (items) => items[Math.floor(Math.random() * items.length)];
+const recentPuzzle = { pinpoint: -1, crossclimb: -1 };
+const freshPuzzle = (items, key) => {
+  let index = Math.floor(Math.random() * items.length);
+  if (items.length > 1 && index === recentPuzzle[key]) index = (index + 1 + Math.floor(Math.random() * (items.length - 1))) % items.length;
+  recentPuzzle[key] = index;
+  return items[index];
+};
 function Pinpoint({ game, onComplete, onExit, initialLevel = 1 }) {
-  const [puzzle] = useState(() => randomItem(PINPOINT_PUZZLES));
+  const [puzzle] = useState(() => freshPuzzle(PINPOINT_PUZZLES, 'pinpoint'));
   const clues = puzzle.clues;
   const [guess, setGuess] = useState('');
   const [wrong, setWrong] = useState(0);
@@ -53,7 +71,7 @@ function Pinpoint({ game, onComplete, onExit, initialLevel = 1 }) {
     if (guess.trim().toLowerCase() === puzzle.answer) {
       setDone(true);
       setMessage(`You found it. The clues all pointed to “${puzzle.answer}.”`);
-      finish(game, onComplete, startedAt, 110 + (4 - wrong) * 20, Math.max(20, 100 - wrong * 15));
+      finish(game, onComplete, startedAt, Math.max(100, 1000 - wrong * 125), Math.max(20, 100 - wrong * 15));
       return;
     }
     const next = wrong + 1;
@@ -61,7 +79,7 @@ function Pinpoint({ game, onComplete, onExit, initialLevel = 1 }) {
     setMessage(next >= maxGuesses ? `The answer was “${puzzle.answer}.” Try another puzzle next time.` : 'Not this time. Here is another clue.');
     if (next >= maxGuesses) {
       setDone(true);
-      finish(game, onComplete, startedAt, 15, 10);
+      finish(game, onComplete, startedAt, Math.max(80, 250 - wrong * 30), 10);
     }
     setGuess('');
   };
@@ -82,11 +100,12 @@ const WORD_LADDERS = [
   { start: 'MILE', startHint: 'A unit of distance', finish: 'WALL', finishHint: 'A room boundary', words: ['MILD', 'WILD', 'WILL'] },
 ];
 function Crossclimb({ game, onComplete, onExit }) {
-  const [puzzle] = useState(() => randomItem(WORD_LADDERS));
+  const [puzzle] = useState(() => freshPuzzle(WORD_LADDERS, 'crossclimb'));
   const words = puzzle.words;
   const [slots, setSlots] = useState(() => Array(words.length).fill(''));
   const [picked, setPicked] = useState('');
   const [message, setMessage] = useState('');
+  const [mistakes, setMistakes] = useState(0);
   const [startedAt] = useState(() => Date.now());
   const available = words.filter((word) => !slots.includes(word));
   const check = () => {
@@ -94,7 +113,8 @@ function Crossclimb({ game, onComplete, onExit }) {
     const ladder = [puzzle.start, ...slots, puzzle.finish];
     const valid = ladder.slice(1).every((word, index) => hammingDistanceOne(ladder[index], word));
     setMessage(valid ? 'Every step changes exactly one letter. Ladder complete!' : 'Check the order: each neighboring word must differ by one letter.');
-    if (valid) finish(game, onComplete, startedAt, 150, 100);
+    if (valid) finish(game, onComplete, startedAt, puzzleScore(startedAt, 65, mistakes * 45), Math.max(30, 100 - mistakes * 15));
+    else setMistakes((count) => count + 1);
   };
   const placeInSlot = (index) => {
     if (picked) {
@@ -147,7 +167,7 @@ function Queens({ game, onComplete, onExit }) {
     const touching = queens.some((queen, index) => queens.slice(index + 1).some((other) => Math.abs(queen.row - other.row) <= 1 && Math.abs(queen.column - other.column) <= 1));
     const valid = rows.size === SIZE && columns.size === SIZE && coveredRegions.size === SIZE && !touching;
     setMessage(valid ? 'Every row, column, and region is covered safely. Queens placed!' : 'A queen shares a row, column, or region, or is touching another queen. Adjust and try again.');
-    if (valid) finish(game, onComplete, startedAt, 180, 100);
+    if (valid) finish(game, onComplete, startedAt, puzzleScore(startedAt, 150), 100);
   };
   return <GameFrame game={game} onExit={onExit} prompt="Place six queens. Keep one in every row, column, and colored region, with no queens touching each other.">
     <div className="puzzle-tools"><button type="button" className={tool === 'queen' ? 'active' : ''} onClick={() => setTool('queen')}><i className="ph-fill ph-crown"></i> Place queen</button><button type="button" className={tool === 'note' ? 'active' : ''} onClick={() => setTool('note')}><i className="ph ph-x"></i> Add note</button><span>{queens.length} / 6 queens</span></div>
@@ -181,6 +201,7 @@ function Tango({ game, onComplete, onExit, initialLevel = 1 }) {
   const { solution, givens, relations } = puzzle;
   const [cells, setCells] = useState(() => solution.map((row, rowIndex) => row.map((value, column) => givens.get(`${rowIndex},${column}`) ?? null)));
   const [message, setMessage] = useState('Fill every tile with a sun or moon. Use the relation clues below the board.');
+  const [mistakes, setMistakes] = useState(0);
   const [startedAt] = useState(() => Date.now());
   const toggle = (row, column) => {
     if (givens.has(`${row},${column}`)) return;
@@ -197,7 +218,8 @@ function Tango({ game, onComplete, onExit, initialLevel = 1 }) {
     const valid = balanced && noTriples && relationsOkay;
     const messageText = valid ? 'Balanced, no triples, and all relation clues satisfied. Puzzle complete!' : !balanced ? 'Each row and column needs three suns and three moons.' : !noTriples ? 'Avoid three identical symbols in a row.' : 'One or more = / × relation clues do not match.';
     setMessage(messageText);
-    if (valid) finish(game, onComplete, startedAt, 170, 100);
+    if (valid) finish(game, onComplete, startedAt, puzzleScore(startedAt, 180, mistakes * 25), Math.max(35, 100 - mistakes * 5));
+    else setMistakes((count) => count + 1);
   };
   return <GameFrame game={game} onExit={onExit} prompt="Balance suns and moons across every line. No line may contain three matching symbols in a row.">
     <div className="tango-legend"><span className="tango-sun"><i className="ph-fill ph-sun"></i> Sun</span><span className="tango-moon"><i className="ph-fill ph-moon"></i> Moon</span><small>Tap a tile to cycle blank → sun → moon.</small></div>
@@ -218,23 +240,24 @@ function Zip({ game, onComplete, onExit }) {
   const [route] = useState(() => makeZipRoute(Math.random() > .5));
   const checkpoints = useMemo(() => new Map([0, 6, 12, 18, 24].map((step, index) => [route[step], String(index * 6 + 1)])), [route]);
   const [path, setPath] = useState([]);
+  const [mistakes, setMistakes] = useState(0);
   const [message, setMessage] = useState('Begin at 1. Follow a continuous path and visit every tile once.');
   const [startedAt] = useState(() => Date.now());
   const select = (index) => {
     if (!path.length) {
-      if (index !== route[0]) { setMessage('Start at number 1 in the top-left corner.'); return; }
+      if (index !== route[0]) { setMistakes((count) => count + 1); setMessage('Start at number 1 in the top-left corner.'); return; }
       setPath([index]); setMessage('Good start. Continue to a neighboring tile.'); return;
     }
     const existing = path.indexOf(index);
     if (existing !== -1) { setPath(path.slice(0, existing + 1)); setMessage('You can retrace the last part of the path.'); return; }
     const last = path[path.length - 1];
-    if (Math.abs(Math.floor(index / 5) - Math.floor(last / 5)) + Math.abs((index % 5) - (last % 5)) !== 1) { setMessage('Choose a tile that shares an edge with your current path.'); return; }
+    if (Math.abs(Math.floor(index / 5) - Math.floor(last / 5)) + Math.abs((index % 5) - (last % 5)) !== 1) { setMistakes((count) => count + 1); setMessage('Choose a tile that shares an edge with your current path.'); return; }
     const next = [...path, index];
     setPath(next);
     const checkpointsMatch = [0, 6, 12, 18, 24].every((step) => next[step] === route[step]);
     if (next.length === 25 && checkpointsMatch) {
       setMessage('A complete route. Every tile is visited once!');
-      finish(game, onComplete, startedAt, 150, 100);
+      finish(game, onComplete, startedAt, puzzleScore(startedAt, 120, mistakes * 18), Math.max(35, 100 - mistakes * 5));
     } else setMessage(`${next.length} of 25 tiles connected.`);
   };
   return <GameFrame game={game} onExit={onExit} prompt="Draw one continuous route from 1 to 25. Visit every tile exactly once, moving only up, down, left, or right.">
@@ -282,7 +305,7 @@ function MiniSudoku({ game, onComplete, onExit, initialLevel = 1 }) {
     }));
     const valid = validRows && validColumns && validBoxes;
     setMessage(valid ? 'The grid is complete. Every row, column, and box checks out!' : 'There is a repeated or incorrect value. Review your row, column, and box.');
-    if (valid) finish(game, onComplete, startedAt, 180, 100);
+    if (valid) finish(game, onComplete, startedAt, puzzleScore(startedAt, 240 + blanks.size * 4), 100);
   };
   return <GameFrame game={game} onExit={onExit} prompt="Complete the 6 × 6 Sudoku. Each row, column, and 2 × 3 box must contain numbers 1 through 6 once.">
     <div className="sudoku-toolbar"><span><i className="ph ph-grid-four"></i> {givensCount} clues</span><button type="button" onClick={() => setEntries({})}>Clear entries</button></div>
@@ -317,13 +340,15 @@ function Patches({ game, onComplete, onExit }) {
   const [piece, setPiece] = useState(0);
   const [turns, setTurns] = useState(() => shuffle([0, 1, 2, 3]));
   const [message, setMessage] = useState('Choose a patch, rotate it if needed, and place all sixteen squares without overlaps.');
+  const [mistakes, setMistakes] = useState(0);
+  const [rotations, setRotations] = useState(0);
   const [startedAt] = useState(() => Date.now());
   const occupied = new Map(placed.flatMap((placement) => placement.cells.map((key) => [key, placement.piece])));
   const currentShape = rotateShape(pieceShapes[piece], turns[piece]);
   const placeAt = (row, column) => {
     if (placed.some((placement) => placement.piece === piece)) { setMessage('That patch is already placed. Undo the last move to reposition it.'); return; }
     const cells = currentShape.map(([r, c]) => `${row + r},${column + c}`);
-    if (cells.some((key) => { const [r, c] = key.split(',').map(Number); return r >= 4 || c >= 4 || occupied.has(key); })) { setMessage('That patch would overlap or extend beyond the board. Try another square.'); return; }
+    if (cells.some((key) => { const [r, c] = key.split(',').map(Number); return r >= 4 || c >= 4 || occupied.has(key); })) { setMistakes((count) => count + 1); setMessage('That patch would overlap or extend beyond the board. Try another square.'); return; }
     const next = [...placed, { piece, cells }];
     setPlaced(next);
     setMessage(`${next.length} of 4 patches placed.`);
@@ -331,11 +356,11 @@ function Patches({ game, onComplete, onExit }) {
       const complete = new Set(next.flatMap((placement) => placement.cells));
       if (complete.size === 16) {
         setMessage('Every square is covered exactly once. Board complete!');
-        finish(game, onComplete, startedAt, 150, 100);
+        finish(game, onComplete, startedAt, puzzleScore(startedAt, 80, mistakes * 20 + rotations * 10), Math.max(40, 100 - mistakes * 5));
       }
     }
   };
-  const rotate = () => setTurns((current) => current.map((count, index) => index === piece ? (count + 1) % 4 : count));
+  const rotate = () => { setRotations((count) => count + 1); setTurns((current) => current.map((count, index) => index === piece ? (count + 1) % 4 : count)); };
   const undo = () => {
     if (!placed.length) return;
     setPlaced((current) => current.slice(0, -1));
@@ -363,16 +388,17 @@ function Wend({ game, onComplete, onExit }) {
   const [wordPath, setWordPath] = useState([]);
   const [used, setUsed] = useState([]);
   const [message, setMessage] = useState('Select a word, then trace its letters through neighboring tiles. Use every tile once.');
+  const [mistakes, setMistakes] = useState(0);
   const [startedAt] = useState(() => Date.now());
   const chooseWord = (index) => { if (!used.includes(index)) { setWordIndex(index); setWordPath([]); setMessage(`Trace ${words[index]} one letter at a time.`); } };
   const selectTile = (tile) => {
     if (used.some((completedWord) => WEND_PATHS[completedWord].includes(tile))) { setMessage('That tile is already part of a completed word.'); return; }
     const word = words[wordIndex];
     const nextIndex = wordPath.length;
-    if (grid[tile] !== word[nextIndex]) { setMessage(`Find the next letter “${word[nextIndex]}” in ${word}.`); return; }
+    if (grid[tile] !== word[nextIndex]) { setMistakes((count) => count + 1); setMessage(`Find the next letter “${word[nextIndex]}” in ${word}.`); return; }
     if (wordPath.length) {
       const previous = wordPath[wordPath.length - 1];
-      if (Math.abs(Math.floor(previous / 4) - Math.floor(tile / 4)) + Math.abs((previous % 4) - (tile % 4)) !== 1) { setMessage('Choose a tile beside the previous letter.'); return; }
+      if (Math.abs(Math.floor(previous / 4) - Math.floor(tile / 4)) + Math.abs((previous % 4) - (tile % 4)) !== 1) { setMistakes((count) => count + 1); setMessage('Choose a tile beside the previous letter.'); return; }
     }
     const nextPath = [...wordPath, tile];
     setWordPath(nextPath);
@@ -382,7 +408,7 @@ function Wend({ game, onComplete, onExit }) {
       setWordPath([]);
       if (completedWords.length === words.length) {
         setMessage('All four words are connected, and every tile has been used once!');
-        finish(game, onComplete, startedAt, 160, 100);
+        finish(game, onComplete, startedAt, puzzleScore(startedAt, 90, mistakes * 18), Math.max(40, 100 - mistakes * 4));
       } else setMessage(`${word} found. Choose another word to continue.`);
     }
   };

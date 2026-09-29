@@ -5,7 +5,14 @@ const COLORS = [
   { name: 'Green', value: '#34d399' }, { name: 'Amber', value: '#fbbf24' },
 ];
 const WORDS = ['bright', 'planet', 'garden', 'signal', 'motion', 'silver', 'puzzle', 'bridge', 'energy', 'canvas', 'forest', 'rhythm'];
-const shuffle = (items) => [...items].sort(() => Math.random() - 0.5);
+const shuffle = (items) => {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swap]] = [result[swap], result[index]];
+  }
+  return result;
+};
 const asChoices = (answer, distractors) => shuffle([...new Set([String(answer), ...distractors.map(String).filter((value) => value !== String(answer))])].slice(0, 4));
 
 function createChallenge(game, level, round) {
@@ -18,12 +25,14 @@ function createChallenge(game, level, round) {
     const length = Math.min(7, 3 + level);
     const symbols = ['◆', '●', '▲', '■', '✦', '⬟', '♥'];
     const sequence = Array.from({ length }, () => symbols[Math.floor(Math.random() * symbols.length)]);
-    const alternatives = Array.from({ length: 3 }, () => {
+    const alternatives = [];
+    while (alternatives.length < 3) {
       const wrong = [...sequence];
       const index = Math.floor(Math.random() * wrong.length);
       wrong[index] = symbols.filter((symbol) => symbol !== wrong[index])[Math.floor(Math.random() * (symbols.length - 1))];
-      return wrong.join(' ');
-    });
+      const candidate = wrong.join(' ');
+      if (!alternatives.includes(candidate)) alternatives.push(candidate);
+    }
     const answer = sequence.join(' ');
     return { prompt: 'Remember the sequence, then choose it after it hides.', sequence, options: asChoices(answer, alternatives), answer };
   }
@@ -69,6 +78,7 @@ export default function CognitiveMiniGame({ game, onComplete, onExit, initialLev
   const [answerState, setAnswerState] = useState({ round: 1, selected: '' });
   const [sequenceHiddenRound, setSequenceHiddenRound] = useState(0);
   const questionStartedAt = useRef(0);
+  const streakRef = useRef(0);
   const [startedAt] = useState(() => Date.now());
   const challenge = useMemo(() => createChallenge(game, level, round), [game, level, round]);
   const selected = answerState.round === round ? answerState.selected : '';
@@ -87,7 +97,9 @@ export default function CognitiveMiniGame({ game, onComplete, onExit, initialLev
     if (selected || (game.id === 'memory' && showSequence)) return;
     const correctAnswer = String(option) === String(challenge.answer);
     const responseMs = answeredAt - questionStartedAt.current;
-    const points = correctAnswer ? 10 + Math.max(0, Math.min(5, Math.floor((4500 - responseMs) / 900))) : 0;
+    // Normalize every ten-question run to a 1,000 point ceiling. Accuracy is
+    // the main reward; response speed contributes a smaller capped bonus.
+    const points = correctAnswer ? 60 + Math.max(0, Math.min(40, Math.round((4500 - responseMs) / 100))) : 0;
     setAnswerState({ round, selected: String(option) });
     setCorrect((value) => value + (correctAnswer ? 1 : 0));
     setScore((value) => value + points);
@@ -99,7 +111,12 @@ export default function CognitiveMiniGame({ game, onComplete, onExit, initialLev
         onComplete(game.name, game.category, finalScore, Math.round((finalCorrect / 10) * 100), Math.max(1, Math.round((Date.now() - startedAt) / 1000)));
         return;
       }
-      setLevel((value) => Math.max(1, Math.min(5, value + (correctAnswer ? 1 : -1))));
+      setLevel((value) => {
+        const nextStreak = streakRef.current + (correctAnswer ? 1 : -1);
+        streakRef.current = Math.abs(nextStreak) >= 2 ? 0 : nextStreak;
+        if (Math.abs(nextStreak) < 2) return value;
+        return Math.max(1, Math.min(5, value + Math.sign(nextStreak)));
+      });
       setRound((value) => value + 1);
     }, 520);
   };

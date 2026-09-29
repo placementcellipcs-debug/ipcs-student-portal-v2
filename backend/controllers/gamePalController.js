@@ -10,7 +10,7 @@ const ROOM_GAME_NAMES = {
     logic: 'Pattern Finder', flexibility: 'Rule Switch', speed: 'Quick Spot', pinpoint: 'Pinpoint',
     crossclimb: 'Crossclimb', queens: 'Queens', tango: 'Tango', zip: 'Zip', 'mini-sudoku': 'Mini Sudoku',
     patches: 'Patches', wend: 'Wend', knifeshow: 'Knife Show', snowrider: 'Snow Rider 3D', dino: 'Dino Runner',
-    chess: 'Chess', 'word-association': 'Word Association',
+    chess: 'Chess', 'word-association': 'Word Association', 'ludo-king': 'Ludo King', 'snakes-ladders': 'Snakes & Ladders',
 };
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const gamePalSpreadsheetId = () => process.env.GAMEPAL_SPREADSHEET_ID || process.env.SPREADSHEET_ID;
@@ -65,7 +65,7 @@ const roomFromRow = (row) => ({
         code: String(row[0] || '').trim().toUpperCase(), createdAt: row[1] || '', joinDeadline: row[2] || '',
         startedAt: row[3] || '', finishedAt: row[4] || '', gameId: row[5] || '', gameName: row[6] || 'GamePal game',
         creatorEmail: String(row[7] || '').trim().toLowerCase(), creatorName: row[8] || 'Student',
-        status: row[9] || 'Waiting', maxPlayers: Math.max(2, Number.parseInt(row[10], 10) || 4), participants: [],
+        status: row[9] || 'Waiting', maxPlayers: 0, participants: [],
     });
 
 const roomToRow = (room) => [
@@ -131,8 +131,8 @@ const createGroupRoom = async (req, res) => {
         const gameName = ROOM_GAME_NAMES[gameId];
         if (!creatorEmail) return res.status(401).json({ success: false, message: 'Please sign in again.' });
         if (!gameName) return res.status(400).json({ success: false, message: 'Choose a GamePal game for your room.' });
-        const requestedSize = Number.parseInt(req.body?.maxPlayers, 10) || 4;
-        const maxPlayers = Math.min(8, Math.max(2, requestedSize));
+        // Room codes are the access control. There is no fixed player cap.
+        const maxPlayers = 0;
         const spreadsheetId = gamePalSpreadsheetId();
         const rows = await readRoomRows(spreadsheetId);
         const existing = new Set(rows.slice(1).map((row) => String(row[0] || '').trim().toUpperCase()));
@@ -174,7 +174,6 @@ const joinGroupRoom = async (req, res) => {
         }
         if (room.status !== 'Waiting') return res.status(409).json({ success: false, message: 'This room has already started or ended. It is closed to joining.' });
         if (Date.parse(room.joinDeadline) <= Date.now()) return res.status(410).json({ success: false, message: 'The joining window has ended for this room.' });
-        if (room.participants.length >= room.maxPlayers) return res.status(409).json({ success: false, message: 'This room is full.' });
         const studentRows = await DatabaseService.getSheetData('Data!A:AG');
         const profile = studentRows.slice(1).reverse().find((row) => String(row[3] || '').trim().toLowerCase() === email);
         if (!profile) return res.status(403).json({ success: false, message: 'Only signed-in IPCS students can join a group room.' });
@@ -200,8 +199,6 @@ const startGroupRoom = async (req, res) => {
         room.participants = roomMembersForCode(memberRows, code);
         if (room.creatorEmail !== email) return res.status(403).json({ success: false, message: 'Only the room creator can start this game.' });
         if (room.status !== 'Waiting') return res.status(409).json({ success: false, message: 'This room is no longer waiting to start.' });
-        const joinWindowEnded = Date.parse(room.joinDeadline) <= Date.now();
-        if (room.participants.length < room.maxPlayers && !joinWindowEnded) return res.status(409).json({ success: false, message: `Wait for all ${room.maxPlayers} seats or until the five-minute joining window ends.` });
         if (room.participants.length < 2) {
             room.status = 'Expired';
             await saveRoom(room, index, spreadsheetId);
@@ -398,7 +395,10 @@ const getGamePalDashboard = async (req, res) => {
         }
         Object.values(games).forEach((game) => {
             game.averageAccuracy = Math.round(game.accuracyTotal / game.attempts);
-            game.level = Math.min(5, 1 + Math.floor(game.attempts / 2));
+            // Let the next session reflect both practice and mastery. Frequent
+            // play alone should not make every game jump to its hardest level.
+            const masteryAdjustment = game.averageAccuracy >= 80 ? 1 : game.averageAccuracy < 45 ? -1 : 0;
+            game.level = Math.max(1, Math.min(5, 1 + Math.floor(game.attempts / 3) + masteryAdjustment));
             delete game.accuracyTotal;
             const categoryKey = game.category.replace(/\s/g, '');
             if (userStats.categories[categoryKey] !== undefined) userStats.categories[categoryKey] = Math.max(userStats.categories[categoryKey], game.bestScore);

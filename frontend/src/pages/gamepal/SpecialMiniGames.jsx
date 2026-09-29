@@ -14,7 +14,6 @@ function GameShell({ game, onExit, children, meta }) {
 }
 
 function KnifeShow({ game, onComplete, onExit }) {
-  const [rotation, setRotation] = useState(0);
   const [knives, setKnives] = useState([]);
   const [throws, setThrows] = useState(0);
   const [hits, setHits] = useState(0);
@@ -26,9 +25,7 @@ function KnifeShow({ game, onComplete, onExit }) {
 
   useEffect(() => {
     startedAt.current = Date.now();
-    const timer = window.setInterval(() => setRotation((value) => (value + (2 + hits * 0.18)) % 360), 32);
-    return () => window.clearInterval(timer);
-  }, [hits]);
+  }, []);
 
   const finish = useCallback((finalHits, finalThrows) => {
     if (finishedRef.current) return;
@@ -41,6 +38,8 @@ function KnifeShow({ game, onComplete, onExit }) {
   const throwKnife = () => {
     if (ended) return;
     const nextThrows = throws + 1;
+    const speed = 110 + hits * 12;
+    const rotation = ((Date.now() - startedAt.current) * speed / 1000) % 360;
     const landingAngle = ((90 - rotation) % 360 + 360) % 360;
     const collision = knives.some((angle) => {
       const distance = Math.abs(((landingAngle - angle + 540) % 360) - 180);
@@ -67,7 +66,7 @@ function KnifeShow({ game, onComplete, onExit }) {
       <h1>Find the opening.</h1>
       <p>Tap when the target’s lower edge is clear. Three collisions end the run.</p>
       <div className="knife-stage" aria-label={`Rotating target, ${hits} of 10 throws landed`}>
-        <div className="knife-wheel" style={{ transform: `rotate(${rotation}deg)` }}>
+        <div className="knife-wheel" style={{ '--spin-duration': `${360 / (110 + hits * 12)}s` }}>
           <span className="knife-wheel-core">✦</span>
           {knives.map((angle, index) => <i key={index} className="knife-stuck-blade" style={{ transform: `rotate(${angle}deg) translateY(-95px)` }}>➤</i>)}
           <span className="knife-fruit">✦</span>
@@ -83,6 +82,7 @@ function KnifeShow({ game, onComplete, onExit }) {
 }
 
 function SnowRider({ game, onComplete, onExit }) {
+  const [prefersReducedMotion] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false);
   const [lane, setLane] = useState(1);
   const [items, setItems] = useState([]);
   const [ticks, setTicks] = useState(0);
@@ -100,7 +100,9 @@ function SnowRider({ game, onComplete, onExit }) {
   const finish = useCallback((crashed = false) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    const score = Math.max(0, Math.floor(tickRef.current / 3) + giftsRef.current * 35);
+    const distanceScore = Math.round(Math.min(600, tickRef.current / 400 * 600));
+    const giftScore = Math.min(400, giftsRef.current * 20);
+    const score = Math.max(0, distanceScore + giftScore);
     onComplete(game.name, game.category, score, crashed ? Math.max(25, Math.round((tickRef.current / 400) * 100)) : 100, Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)));
   }, [game, onComplete]);
 
@@ -131,26 +133,37 @@ function SnowRider({ game, onComplete, onExit }) {
     const timer = window.setInterval(() => {
       const nextTick = tickRef.current + 1;
       tickRef.current = nextTick;
-      setTicks(nextTick);
-      let nextItems = itemsRef.current.map((item) => ({ ...item, y: item.y + 1.5 + Math.min(2.4, nextTick / 230) }));
-      if (nextTick % 8 === 0) nextItems.push({ id: `tree-${nextTick}`, type: 'obstacle', lane: Math.floor(Math.random() * 3), y: -6, glyph: Math.random() > .5 ? '🌲' : '🪨' });
-      if (nextTick % 14 === 0) nextItems.push({ id: `gift-${nextTick}`, type: 'gift', lane: Math.floor(Math.random() * 3), y: -5, glyph: '🎁' });
+      if (nextTick % 10 === 0) setTicks(nextTick);
+      let nextItems = itemsRef.current.map((item) => ({ ...item, y: item.y + 0.9 + Math.min(1.3, nextTick / 600) }));
+      const spawned = [];
+      if (nextTick % 8 === 0) {
+        const item = { id: `tree-${nextTick}`, type: 'obstacle', lane: Math.floor(Math.random() * 3), y: -6, glyph: Math.random() > .5 ? '🌲' : '🪨' };
+        nextItems.push(item); spawned.push({ ...item, fallDuration: Math.max(3.8, 7.4 - nextTick / 900) });
+      }
+      if (nextTick % 14 === 0) {
+        const item = { id: `gift-${nextTick}`, type: 'gift', lane: Math.floor(Math.random() * 3), y: -5, glyph: '🎁' };
+        nextItems.push(item); spawned.push({ ...item, fallDuration: Math.max(3.8, 7.4 - nextTick / 900) });
+      }
       const hitObstacle = nextItems.some((item) => item.type === 'obstacle' && item.lane === laneRef.current && item.y >= 81 && item.y <= 94 && !jumpingRef.current);
       const pickedGift = nextItems.filter((item) => item.type === 'gift' && item.lane === laneRef.current && item.y >= 84 && item.y <= 96);
       if (pickedGift.length) {
         const foundIds = new Set(pickedGift.map((item) => item.id));
         nextItems = nextItems.filter((item) => !foundIds.has(item.id));
+        setItems((current) => current.filter((item) => !foundIds.has(item.id)));
         giftsRef.current += pickedGift.length;
         setGifts(giftsRef.current);
         setLastResult('Gift collected! Your run score is climbing.');
       }
+      const expiredIds = new Set(nextItems.filter((item) => item.y >= 106).map((item) => item.id));
       itemsRef.current = nextItems.filter((item) => item.y < 106);
-      setItems(itemsRef.current);
+      if (spawned.length) setItems((current) => [...current, ...spawned]);
+      if (expiredIds.size) setItems((current) => current.filter((item) => !expiredIds.has(item.id)));
+      if (prefersReducedMotion && nextTick % 4 === 0) setItems(itemsRef.current.map((item) => ({ ...item })));
       if (hitObstacle) { setLastResult('Run ended — every ride gives you another chance to beat your distance.'); finish(true); }
       else if (nextTick >= 400) { setLastResult('Mountain mastered! You completed the full descent.'); finish(false); }
     }, 100);
     return () => window.clearInterval(timer);
-  }, [finish]);
+  }, [finish, prefersReducedMotion]);
 
   return <GameShell game={game} onExit={onExit} meta={`${Math.floor(ticks / 10)}s / 40s`}>
     <section className="special-game-card snow-game-card">
@@ -158,7 +171,7 @@ function SnowRider({ game, onComplete, onExit }) {
       <div className="snow-course" aria-label="Three-lane snowy sled course">
         <span className="snow-mountain mountain-one"></span><span className="snow-mountain mountain-two"></span>
         {[0, 1, 2].map((column) => <span key={column} className="snow-lane-line" style={{ left: `${((column + 1) / 3) * 100}%` }}></span>)}
-        {items.map((item) => <span key={item.id} className={`snow-course-item ${item.type}`} style={{ left: `${(item.lane + .5) * 33.333}%`, top: `${Math.min(95, Math.max(0, item.y))}%` }}>{item.glyph}</span>)}
+        {items.map((item) => <span key={item.id} className={`snow-course-item ${item.type}`} style={{ left: `${(item.lane + .5) * 33.333}%`, top: prefersReducedMotion ? `${item.y}%` : `${item.type === 'gift' ? -5 : -6}%`, '--fall-duration': `${item.fallDuration}s` }}>{item.glyph}</span>)}
         <span className={`snow-rider ${jumping ? 'jumping' : ''}`} style={{ left: `${(lane + .5) * 33.333}%` }}>🛷</span>
       </div>
       <p className="special-game-feedback" aria-live="polite">{lastResult}</p>
@@ -169,6 +182,7 @@ function SnowRider({ game, onComplete, onExit }) {
 }
 
 function DinoRunner({ game, onComplete, onExit }) {
+  const [prefersReducedMotion] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false);
   const [obstacles, setObstacles] = useState([]);
   const [ticks, setTicks] = useState(0);
   const [jumping, setJumping] = useState(false);
@@ -185,7 +199,7 @@ function DinoRunner({ game, onComplete, onExit }) {
   const finish = useCallback((crashed = false) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    const score = Math.floor(tickRef.current / 2);
+    const score = Math.round(Math.min(1000, tickRef.current / 600 * 1000));
     onComplete(game.name, game.category, score, crashed ? Math.min(99, Math.floor(tickRef.current / 2)) : 100, Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)));
   }, [game, onComplete]);
 
@@ -210,26 +224,34 @@ function DinoRunner({ game, onComplete, onExit }) {
   useEffect(() => {
     const timer = window.setInterval(() => {
       const nextTick = tickRef.current + 1;
-      tickRef.current = nextTick; setTicks(nextTick);
+      tickRef.current = nextTick;
+      if (nextTick % 4 === 0) setTicks(nextTick);
       if (nextTick % 100 === 0) setNight((value) => !value);
       const speed = 1.2 + Math.min(2.5, nextTick / 250);
       let nextObstacles = obstaclesRef.current.map((item) => ({ ...item, x: item.x - speed }));
-      if (nextTick % 32 === 0) nextObstacles.push({ id: nextTick, x: 102, kind: nextTick > 120 && Math.random() > .6 ? 'bird' : 'cactus' });
+      let spawnedObstacle = null;
+      if (nextTick % 32 === 0) {
+        spawnedObstacle = { id: nextTick, x: 102, speed, kind: nextTick > 120 && Math.random() > .6 ? 'bird' : 'cactus' };
+        nextObstacles.push(spawnedObstacle);
+      }
       const collision = nextObstacles.some((item) => item.x <= 15 && item.x >= 10 && (item.kind === 'cactus' ? !jumpRef.current : !duckRef.current));
+      const expiredIds = new Set(nextObstacles.filter((item) => item.x <= -8).map((item) => item.id));
       obstaclesRef.current = nextObstacles.filter((item) => item.x > -8);
-      setObstacles(obstaclesRef.current);
+      if (spawnedObstacle) setObstacles((current) => [...current, spawnedObstacle]);
+      if (expiredIds.size) setObstacles((current) => current.filter((item) => !expiredIds.has(item.id)));
+      if (prefersReducedMotion && nextTick % 4 === 0) setObstacles(obstaclesRef.current.map((item) => ({ ...item })));
       if (collision) { setLastResult('The run ended. Your next attempt will start with a new obstacle pattern.'); finish(true); }
       else if (nextTick >= 600) { setLastResult('Run complete — excellent reflexes.'); finish(false); }
     }, 50);
     return () => window.clearInterval(timer);
-  }, [finish]);
+  }, [finish, prefersReducedMotion]);
 
   return <GameShell game={game} onExit={onExit} meta={`DISTANCE ${Math.floor(ticks / 2)}`}>
     <section className="special-game-card dino-game-card">
       <div className="special-game-heading"><div><p className="eyebrow">TREX SPRINT · SPEED INCREASES</p><h1>Keep the run alive.</h1><p>Clear ground hazards with a jump; duck under the flyers.</p></div><span className="dino-score-badge">{Math.floor(ticks / 2).toString().padStart(4, '0')}</span></div>
       <div className={`dino-track ${night ? 'night' : ''}`} aria-label="Dinosaur runner course">
         <span className="dino-cloud cloud-one">☁</span><span className="dino-cloud cloud-two">☁</span>
-        {obstacles.map((item) => <span key={item.id} className={`dino-obstacle ${item.kind}`} style={{ left: `${item.x}%` }}>{item.kind === 'bird' ? '🪽' : '🌵'}</span>)}
+        {obstacles.map((item) => <span key={item.id} className={`dino-obstacle ${item.kind}`} style={{ left: `${item.x}%`, '--travel-duration': `${(110 / item.speed / 20).toFixed(2)}s` }}>{item.kind === 'bird' ? '🪽' : '🌵'}</span>)}
         <span className={`dino-player ${jumping ? 'jumping' : ''} ${ducking ? 'ducking' : ''}`}>🦖</span>
         <span className="dino-ground"></span>
       </div>
@@ -266,10 +288,23 @@ const ASSOCIATION_SETS = [
     { name: 'TRAVEL', words: ['TICKET', 'PASSPORT', 'LUGGAGE', 'ITINERARY'] },
   ],
 ];
-const shuffle = (items) => [...items].sort(() => Math.random() - 0.5);
+const shuffle = (items) => {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swap]] = [result[swap], result[index]];
+  }
+  return result;
+};
+let lastAssociationPuzzle = -1;
 
 function WordAssociation({ game, onComplete, onExit }) {
-  const puzzle = ASSOCIATION_SETS[(Number(game.sessionSeed) || 0) % ASSOCIATION_SETS.length];
+  const [puzzle] = useState(() => {
+    let index = Math.floor(Math.random() * ASSOCIATION_SETS.length);
+    if (index === lastAssociationPuzzle) index = (index + 1 + Math.floor(Math.random() * (ASSOCIATION_SETS.length - 1))) % ASSOCIATION_SETS.length;
+    lastAssociationPuzzle = index;
+    return ASSOCIATION_SETS[index];
+  });
   const [tiles] = useState(() => {
     const words = puzzle.flatMap((group) => group.words.map((word) => ({ word, group: group.name })));
     return shuffle(words);
@@ -300,7 +335,7 @@ function WordAssociation({ game, onComplete, onExit }) {
     setSolved(nextSolved); setSelected([]); setFeedback(`Nice connection: ${group.name.toLowerCase()}.`);
     if (nextSolved.length === puzzle.length && !finishedRef.current) {
       finishedRef.current = true;
-      const score = Math.max(0, 400 - mistakes * 35);
+      const score = Math.max(100, 1000 - mistakes * 90);
       window.setTimeout(() => onComplete(game.name, game.category, score, Math.round((4 / (4 + mistakes)) * 100), Math.max(1, Math.round((Date.now() - startedAt.current) / 1000))), 800);
     }
   };
@@ -447,7 +482,7 @@ function ChessTactics({ game, onComplete, onExit }) {
   const finish = useCallback((result) => {
     if (finishedRef.current) return;
     finishedRef.current = true; setOutcome(result);
-    const score = result === 'win' ? 500 : result === 'draw' ? 260 : 80;
+    const score = result === 'win' ? 1000 : result === 'draw' ? 550 : 150;
     onComplete(game.name, game.category, score, result === 'win' ? 100 : result === 'draw' ? 60 : 25, Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)));
   }, [game, onComplete]);
 

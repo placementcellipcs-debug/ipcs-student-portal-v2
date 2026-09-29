@@ -4,6 +4,7 @@ import api from '../../config/axios';
 import CognitiveMiniGame from './CognitiveMiniGame';
 import ReferenceMiniGame from './ReferenceMiniGames';
 import SpecialMiniGame from './SpecialMiniGames';
+import BoardMiniGame from './BoardMiniGames';
 import GameArtwork from './GameArtwork';
 import DriveImage from '../../components/ui/DriveImage';
 import ModalPortal from '../../components/ui/ModalPortal';
@@ -30,10 +31,13 @@ const GAMES = [
   { id: 'dino', name: 'Dino Runner', category: 'Speed', icon: 'ph-footprints', tint: '#34d399', summary: 'Jump, duck, and keep your run alive as the pace rises.' },
   { id: 'chess', name: 'Chess', category: 'Problem Solving', icon: 'ph-chess-knight', tint: '#c084fc', summary: 'Play a full chess match against the GamePal computer.' },
   { id: 'word-association', name: 'Word Association', category: 'Language', icon: 'ph-circles-three-plus', tint: '#fbbf24', summary: 'Group changing word tiles by the hidden theme they share.' },
+  { id: 'ludo-king', name: 'Ludo King', category: 'Problem Solving', icon: 'ph-dice-five', tint: '#fb7185', summary: 'Race your tokens home, use safe squares, and send rivals back to start.' },
+  { id: 'snakes-ladders', name: 'Snakes & Ladders', category: 'Problem Solving', icon: 'ph-stairs', tint: '#34d399', summary: 'Climb ladders, avoid snakes, and be first to reach square 100.' },
 ];
 
 const REFERENCE_GAME_IDS = new Set(['pinpoint', 'crossclimb', 'queens', 'tango', 'zip', 'mini-sudoku', 'patches', 'wend']);
 const SPECIAL_GAME_IDS = new Set(['knifeshow', 'snowrider', 'dino', 'chess', 'word-association']);
+const BOARD_GAME_IDS = new Set(['ludo-king', 'snakes-ladders']);
 const GAME_RULES = {
   memory: { goal: 'Remember the symbol sequence, then select the matching pattern.', controls: 'Watch the sequence until it hides, then tap the matching answer.', scoring: 'Correct answers and quicker responses earn more points. Difficulty adapts each round.' },
   attention: { goal: 'Choose the color of the letters, ignoring the word itself.', controls: 'Tap the answer that matches the ink color.', scoring: 'Ten quick rounds; accuracy and response time shape your score.' },
@@ -55,6 +59,8 @@ const GAME_RULES = {
   dino: { goal: 'Keep running for as long as possible without hitting an obstacle.', controls: 'Press Space/Up to jump over cacti. Hold Down to duck under flyers; touch buttons work on mobile.', scoring: 'Your distance score increases with survival time while the run speeds up.' },
   chess: { goal: 'Play a full game as White and try to checkmate the computer.', controls: 'Tap a white piece to see legal moves, then tap a highlighted square. Use Resign to end early.', scoring: 'Checkmate earns the highest score; a draw or loss receives its own Chess result.' },
   'word-association': { goal: 'Sort sixteen words into four groups of four that share a hidden theme.', controls: 'Select four tiles, then tap Check group. The board changes each time.', scoring: 'Correct groups add points; fewer incorrect guesses improve accuracy.' },
+  'ludo-king': { goal: 'Bring all four of your tokens from the yard to the home triangle before the other players.', controls: 'Roll a six to bring a token out. Select a token that can move the number rolled; land on an opponent to send it home. Exact rolls are needed to finish.', scoring: 'Your points reflect how far your tokens travel and whether you finish first.' },
+  'snakes-ladders': { goal: 'Be the first player to land exactly on square 100.', controls: 'Roll the die and move along the numbered path. A ladder takes you up; a snake slides you down. An overshoot keeps you in place.', scoring: 'The winner earns the top score; other players receive a score based on finishing distance.' },
 };
 
 const indiaDateKey = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
@@ -73,7 +79,8 @@ export default function GamePalHub() {
   const [activeRoom, setActiveRoom] = useState(null);
   const [groupRooms, setGroupRooms] = useState([]);
   const [roomGameId, setRoomGameId] = useState(GAMES[0].id);
-  const [roomMaxPlayers, setRoomMaxPlayers] = useState('4');
+  const [friendEmail, setFriendEmail] = useState('');
+  const [friendGameId, setFriendGameId] = useState(GAMES[0].id);
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [roomClock, setRoomClock] = useState(0);
   const [groupCelebration, setGroupCelebration] = useState(null);
@@ -83,6 +90,8 @@ export default function GamePalHub() {
   const [loading, setLoading] = useState(() => Boolean(user?.email));
   const [message, setMessage] = useState('');
   const [challengeCelebration, setChallengeCelebration] = useState(null);
+  const [lastGameResult, setLastGameResult] = useState(null);
+  const completionHandled = useRef(false);
   const handledRoomStarts = useRef(new Set());
 
   const firstName = cleanName(user?.name);
@@ -92,6 +101,7 @@ export default function GamePalHub() {
   const seenRoomsKey = `talenzo_gamepal_seen_rooms_${user?.email || 'student'}`;
 
   const openGameRules = useCallback((game, context = {}) => {
+    completionHandled.current = false;
     setPendingGame({ game: { ...game, sessionSeed: Date.now() }, challenge: context.challenge || null, room: context.room || null });
   }, []);
 
@@ -219,7 +229,7 @@ export default function GamePalHub() {
     const game = GAMES.find((item) => item.id === roomGameId) || GAMES[0];
     setMessage('Creating your room…');
     try {
-      const response = await api.post('/api/gamepal/rooms', { gameId: game.id, maxPlayers: Number(roomMaxPlayers) });
+      const response = await api.post('/api/gamepal/rooms', { gameId: game.id });
       if (!response.data.success) throw new Error(response.data.message || 'Could not create the room.');
       const room = response.data.room;
       setGroupRooms((current) => [room, ...current.filter((item) => item.code !== room.code)]);
@@ -227,6 +237,23 @@ export default function GamePalHub() {
       setMessage(`Room ${room.code} is ready. Share its code; students have five minutes to join.`);
     } catch (error) {
       setMessage(error.response?.data?.message || error.message || 'Could not create the room.');
+    }
+  };
+
+  const createFriendChallenge = async (event) => {
+    event.preventDefault();
+    const game = GAMES.find((item) => item.id === friendGameId) || GAMES[0];
+    const opponentEmail = friendEmail.trim().toLowerCase();
+    setMessage('Sending your one-to-one game invite…');
+    try {
+      const response = await api.post('/api/gamepal/friends', { opponentEmail, gameId: game.id, gameName: game.name });
+      if (!response.data.success) throw new Error(response.data.message || 'Could not send the invite.');
+      setFriendEmail('');
+      setFriendChallenges((current) => [response.data.challenge, ...current.filter((item) => item.id !== response.data.challenge.id)]);
+      setMessage(`Invite sent to ${response.data.challenge.opponentName || opponentEmail}. Play your round now; your friend can join with their IPCS account.`);
+      openGameRules(game, { challenge: response.data.challenge });
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.message || 'Could not send the invite.');
     }
   };
 
@@ -343,7 +370,17 @@ export default function GamePalHub() {
   };
 
   const handleGameComplete = async (gameName, category, score, accuracy, timeSeconds) => {
-    if (!user?.email) return;
+    if (!user?.email || completionHandled.current) return;
+    completionHandled.current = true;
+    const currentBest = Number(stats?.games?.[gameName]?.bestScore) || 0;
+    const resultId = `${gameName}-${Date.now()}`;
+    setLastGameResult({ id: resultId, gameName, category, score: Number(score) || 0, accuracy: Number(accuracy) || 0, timeSeconds: Number(timeSeconds) || 0, highScore: Math.max(currentBest, Number(score) || 0), isNewRecord: Number(score) > currentBest, saving: true, syncNote: '', standings: [] });
+    setActiveGame(null);
+    const submittedChallenge = activeChallenge;
+    const submittedRoom = activeRoom;
+    setActiveChallenge(null);
+    setActiveRoom(null);
+    const updateResult = (update) => setLastGameResult((current) => current?.id === resultId ? { ...current, ...update } : current);
     try {
       const response = await api.post('/api/gamepal/session', {
         name: user.name, rollNo: user.rollNo, branch: user.branch,
@@ -351,28 +388,36 @@ export default function GamePalHub() {
       });
       if (!response.data.success) throw new Error(response.data.message || 'Your session could not be saved.');
       let challengeStatus = '';
-      if (activeChallenge?.id) {
+      if (submittedChallenge?.id) {
         try {
-          const challengeResponse = await api.post(`/api/gamepal/friends/${encodeURIComponent(activeChallenge.id)}/score`, { score, accuracy });
+          const challengeResponse = await api.post(`/api/gamepal/friends/${encodeURIComponent(submittedChallenge.id)}/score`, { score, accuracy });
           const result = challengeResponse.data;
           challengeStatus = result.status === 'Complete'
             ? result.winner === 'Tie' ? ' Friend challenge tied.' : ` ${result.winner} won the friend challenge.`
             : ' Your score is saved; waiting for your friend.';
-          if (result.status === 'Complete') celebrateChallenge({ ...activeChallenge, ...result });
+          if (result.status === 'Complete') {
+            const creatorIsMe = String(submittedChallenge.creatorEmail || '').toLowerCase() === String(user.email).toLowerCase();
+            const mine = creatorIsMe ? result.creatorScore : result.opponentScore;
+            const theirs = creatorIsMe ? result.opponentScore : result.creatorScore;
+            const friendName = creatorIsMe ? submittedChallenge.opponentName : submittedChallenge.creatorName;
+            updateResult({ matchup: { mine, theirs, friendName, outcome: mine === theirs ? 'tie' : mine > theirs ? 'win' : 'loss' } });
+          }
           await refreshFriendChallenges();
         } catch (challengeError) {
           challengeStatus = ` Your game was saved, but its challenge score could not sync: ${challengeError.response?.data?.message || challengeError.message}`;
         }
       }
-      if (activeRoom?.code) {
+      if (submittedRoom?.code) {
         try {
-          const roomResponse = await api.post(`/api/gamepal/rooms/${encodeURIComponent(activeRoom.code)}/score`, { score, accuracy });
+          const roomResponse = await api.post(`/api/gamepal/rooms/${encodeURIComponent(submittedRoom.code)}/score`, { score, accuracy });
           const roomResult = roomResponse.data;
           if (!roomResult.success) throw new Error(roomResult.message || 'Could not record your room result.');
           setGroupRooms((current) => current.map((room) => room.code === roomResult.room.code ? roomResult.room : room));
           if (roomResult.status === 'Complete') {
-            celebrateGroupRoom(roomResult.room);
-            challengeStatus += ` Group results are in for room ${activeRoom.code}.`;
+            const standings = roomResult.standings || [];
+            const mine = standings.find((member) => member.email === String(user.email).toLowerCase());
+            updateResult({ standings, groupOutcome: mine?.place === 1 ? 'win' : 'loss', roomCode: submittedRoom.code });
+            challengeStatus += ` Group results are in for room ${submittedRoom.code}.`;
           } else challengeStatus += ` Your group score is saved; waiting for ${roomResult.room.participants.filter((member) => member.score == null).length} more player(s).`;
         } catch (roomError) {
           challengeStatus += ` Your session was saved, but the group score could not sync: ${roomError.response?.data?.message || roomError.message}`;
@@ -384,6 +429,7 @@ export default function GamePalHub() {
         return next;
       });
       setMessage(`Workout complete — ${accuracy}% accuracy. Your progress has been saved.${challengeStatus}`);
+      updateResult({ saving: false, syncNote: challengeStatus || 'Score saved to your GamePal profile.' });
       const [dashboardResult, historyResult] = await Promise.allSettled([
         api.post('/api/gamepal/dashboard', {}), api.get('/api/gamepal/history'),
       ]);
@@ -391,16 +437,14 @@ export default function GamePalHub() {
       if (historyResult.status === 'fulfilled' && historyResult.value.data.success) setRecentSessions(historyResult.value.data.sessions || []);
     } catch (error) {
       setMessage(error.response?.data?.message || error.message || 'Your session could not be saved.');
+      updateResult({ saving: false, syncNote: 'Score could not be saved. You can still review this run.' });
     }
-    setActiveChallenge(null);
-    setActiveRoom(null);
-    setActiveGame(null);
   };
 
   if (activeGame) {
-    const Game = SPECIAL_GAME_IDS.has(activeGame.id) ? SpecialMiniGame : REFERENCE_GAME_IDS.has(activeGame.id) ? ReferenceMiniGame : CognitiveMiniGame;
+    const Game = BOARD_GAME_IDS.has(activeGame.id) ? BoardMiniGame : SPECIAL_GAME_IDS.has(activeGame.id) ? SpecialMiniGame : REFERENCE_GAME_IDS.has(activeGame.id) ? ReferenceMiniGame : CognitiveMiniGame;
     const initialLevel = Math.min(5, Math.max(1, Number(stats.games?.[activeGame.name]?.level) || 1));
-    return <Game game={activeGame} initialLevel={initialLevel} onComplete={handleGameComplete} onExit={() => { setActiveChallenge(null); setActiveRoom(null); setActiveGame(null); }} />;
+    return <Game game={activeGame} initialLevel={initialLevel} onComplete={handleGameComplete} onExit={() => { completionHandled.current = false; setActiveChallenge(null); setActiveRoom(null); setActiveGame(null); }} />;
   }
 
   if (loading) return <div className="gamepal-loading"><i className="ph ph-spinner animate-spin"></i><span>Preparing your daily workout…</span></div>;
@@ -472,10 +516,16 @@ export default function GamePalHub() {
           <div className="gamepal-room-setup-grid">
             <form className="gamepal-room-form" onSubmit={createGroupRoom}>
               <div className="gamepal-room-form-icon"><i className="ph-fill ph-users-three"></i></div>
-              <p className="eyebrow">HOST A ROOM</p><h3>Start a group game</h3><p>Room codes stay open for five minutes. Choose how many students can join.</p>
+              <p className="eyebrow">HOST A ROOM</p><h3>Start a group game</h3><p>Anyone with your code can join for five minutes. The creator starts when the group is ready.</p>
               <label>Choose a game<select value={roomGameId} onChange={(event) => setRoomGameId(event.target.value)}>{GAMES.map((game) => <option value={game.id} key={game.id}>{game.name} · {game.category}</option>)}</select></label>
-              <label>Players, including you<select value={roomMaxPlayers} onChange={(event) => setRoomMaxPlayers(event.target.value)}>{['2', '3', '4', '5', '6', '7', '8'].map((count) => <option value={count} key={count}>{count} players</option>)}</select></label>
               <button type="submit" className="gamepal-primary-action"><i className="ph-fill ph-plus-circle"></i> Create room code</button>
+            </form>
+            <form className="gamepal-room-form gamepal-duel-form" onSubmit={createFriendChallenge}>
+              <div className="gamepal-room-form-icon"><i className="ph-fill ph-sword"></i></div>
+              <p className="eyebrow">ONE-TO-ONE DUEL</p><h3>Invite one student</h3><p>Challenge a friend by their IPCS student email. You each play a round and compare scores.</p>
+              <label>Choose a game<select value={friendGameId} onChange={(event) => setFriendGameId(event.target.value)}>{GAMES.map((game) => <option value={game.id} key={game.id}>{game.name} · {game.category}</option>)}</select></label>
+              <label htmlFor="gamepal-friend-email">Friend’s student email</label><input id="gamepal-friend-email" className="gamepal-friend-email" type="email" required value={friendEmail} onChange={(event) => setFriendEmail(event.target.value)} placeholder="friend@example.com" />
+              <button type="submit" className="gamepal-primary-action"><i className="ph-fill ph-paper-plane-tilt"></i> Invite & play</button>
             </form>
             <form className="gamepal-room-join" onSubmit={joinGroupRoom}>
               <div className="gamepal-room-join-icon"><i className="ph-fill ph-key"></i></div>
@@ -491,21 +541,20 @@ export default function GamePalHub() {
               const game = GAMES.find((item) => item.id === room.gameId) || GAMES[0];
               const isCreator = room.creatorEmail === String(user?.email || '').trim().toLowerCase();
               const mine = room.participants?.find((member) => member.email === String(user?.email || '').trim().toLowerCase());
-              const full = room.participants?.length >= room.maxPlayers;
               const timerEnded = roomClock > 0 && Date.parse(room.joinDeadline) <= roomClock;
-              const canStart = isCreator && room.status === 'Waiting' && (full || timerEnded) && room.participants?.length >= 2;
+              const canStart = isCreator && room.status === 'Waiting' && room.participants?.length >= 2;
               const rank = [...(room.participants || [])].filter((member) => member.score != null).sort((left, right) => Number(right.score) - Number(left.score));
               return <article className="gamepal-group-room" key={room.code} style={{ '--game-tint': game.tint }}>
                 <GameArtwork game={game} compact />
-                <div className="gamepal-group-room-main"><div className="gamepal-group-room-title"><div><strong>{game.name}</strong><span>{room.participants?.length || 0} / {room.maxPlayers} players · host: {room.creatorName}</span></div><span className={`gamepal-room-status ${room.status.toLowerCase().replace(/\s+/g, '-')}`}>{room.status}</span></div>
-                  {room.status === 'Waiting' && <div className="gamepal-room-members">{room.participants.map((member) => <span key={member.email}><i className="ph-fill ph-user-circle"></i>{member.name || 'Student'}{member.email === room.creatorEmail ? ' · host' : ''}</span>)}{Array.from({ length: Math.max(0, room.maxPlayers - room.participants.length) }, (_, index) => <span className="empty-seat" key={`seat-${index}`}><i className="ph ph-user-plus"></i>Open seat</span>)}</div>}
-                  {room.status === 'Waiting' && isCreator && <div className="gamepal-room-share"><div><small>SHARE THIS CODE</small><strong>{room.code}</strong></div><button type="button" onClick={() => copyRoomCode(room.code)}><i className="ph ph-copy"></i> Copy code</button><span>{full ? 'Group is full — ready to start.' : timerEnded ? 'Join timer ended — you can start the joined group.' : `Joining closes ${new Date(room.joinDeadline).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`}</span></div>}
+                <div className="gamepal-group-room-main"><div className="gamepal-group-room-title"><div><strong>{game.name}</strong><span>{room.participants?.length || 0} joined · host: {room.creatorName}</span></div><span className={`gamepal-room-status ${room.status.toLowerCase().replace(/\s+/g, '-')}`}>{room.status}</span></div>
+                  {room.status === 'Waiting' && <div className="gamepal-room-members">{room.participants.map((member) => <span key={member.email}><i className="ph-fill ph-user-circle"></i>{member.name || 'Student'}{member.email === room.creatorEmail ? ' · host' : ''}</span>)}</div>}
+                  {room.status === 'Waiting' && isCreator && <div className="gamepal-room-share"><div><small>SHARE THIS CODE</small><strong>{room.code}</strong></div><button type="button" onClick={() => copyRoomCode(room.code)}><i className="ph ph-copy"></i> Copy code</button><span>{timerEnded ? 'The join window has closed.' : `Students can join until ${new Date(room.joinDeadline).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`}</span></div>}
                   {room.status === 'Waiting' && !isCreator && <small className="gamepal-room-wait-note">Waiting for {room.creatorName} to start the game after the group is ready.</small>}
                   {room.status === 'In progress' && <div className="gamepal-room-active-note"><i className="ph-fill ph-lock-key"></i><span>{mine?.score == null ? 'Game in progress. Joining is closed.' : `Your score is in: ${mine.score} points. Waiting for the rest of the group.`}</span>{mine?.score == null && <button type="button" onClick={() => openGameRules(game, { room })}>Play now <i className="ph ph-arrow-right"></i></button>}</div>}
                   {room.status === 'Complete' && <div className="gamepal-room-results">{rank.map((member, index) => <span key={member.email} className={index === 0 ? 'winner' : ''}><b>{ordinal(index + 1)}</b>{member.name}: {member.score} pts</span>)}</div>}
                   {room.status === 'Expired' && <small className="gamepal-room-wait-note">This room expired before another player joined. Create a new code to play.</small>}
                 </div>
-                <div className="gamepal-room-actions">{room.status === 'Waiting' && isCreator && <button type="button" className="gamepal-primary-action" disabled={!canStart} onClick={() => startGroupRoom(room)}>{canStart ? <><i className="ph-fill ph-play"></i> Start game</> : <><i className="ph ph-hourglass"></i> Waiting</>}</button>}{room.status === 'Waiting' && isCreator && !full && !timerEnded && <small>Start unlocks when full</small>}</div>
+                <div className="gamepal-room-actions">{room.status === 'Waiting' && isCreator && <button type="button" className="gamepal-primary-action" disabled={!canStart} onClick={() => startGroupRoom(room)}>{canStart ? <><i className="ph-fill ph-play"></i> Start game</> : <><i className="ph ph-hourglass"></i> Need 2+ players</>}</button>}{room.status === 'Waiting' && isCreator && room.participants?.length < 2 && <small>Invite one or more students to unlock start</small>}</div>
               </article>;
             }) : <p className="gamepal-history-empty">No rooms yet. Create one and share its code with your group.</p>}
           </div>
@@ -541,7 +590,26 @@ export default function GamePalHub() {
       )}
       <p className="gamepal-disclaimer">GamePal is for learning and everyday cognitive practice. Scores describe your GamePal sessions and are not medical assessments.</p>
 
-      {challengeCelebration && (
+      {lastGameResult && (
+        <ModalPortal>
+          <div className={`gamepal-result-overlay outcome-${lastGameResult.groupOutcome || lastGameResult.matchup?.outcome || 'tie'}`} role="presentation">
+            <div className="gamepal-result-particles" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 7) * -0.31}s`, '--particle-drift': `${((index * 29) % 100) - 50}px` }}></i>)}</div>
+            <section className="gamepal-result-card gamepal-run-result-card" role="dialog" aria-modal="true" aria-labelledby="gamepal-run-result-title">
+              <span className="gamepal-result-emblem" aria-hidden="true">{lastGameResult.groupOutcome === 'win' || lastGameResult.matchup?.outcome === 'win' ? '🏆' : lastGameResult.isNewRecord ? '✨' : '🎮'}</span>
+              <p className="eyebrow">{lastGameResult.category} · SESSION COMPLETE</p>
+              <h2 id="gamepal-run-result-title">{lastGameResult.groupOutcome === 'win' || lastGameResult.matchup?.outcome === 'win' ? 'Victory!' : lastGameResult.groupOutcome === 'loss' || lastGameResult.matchup?.outcome === 'loss' ? 'Good game!' : lastGameResult.isNewRecord ? 'New personal best!' : 'Run complete!'}</h2>
+              <p className="gamepal-result-message">{lastGameResult.gameName} · {Math.floor(lastGameResult.timeSeconds / 60)}:{String(lastGameResult.timeSeconds % 60).padStart(2, '0')} played</p>
+              <div className="gamepal-run-score-grid"><div><span>CURRENT SCORE</span><strong>{lastGameResult.score.toLocaleString()}</strong></div><div><span>PERSONAL BEST</span><strong>{lastGameResult.highScore.toLocaleString()}</strong></div><div><span>ACCURACY</span><strong>{lastGameResult.accuracy}%</strong></div></div>
+              {lastGameResult.matchup && <div className="gamepal-result-scoreboard"><div><span>You</span><strong>{lastGameResult.matchup.mine}</strong></div><i>VS</i><div><span>{lastGameResult.matchup.friendName || 'Friend'}</span><strong>{lastGameResult.matchup.theirs ?? '…'}</strong></div></div>}
+              {lastGameResult.standings?.length > 0 && <div className="gamepal-group-standings">{lastGameResult.standings.map((member) => <div className={member.place === 1 ? 'winner' : ''} key={member.email}><span>{member.place === 1 ? '🏆' : `#${member.place}`}</span><strong>{member.name}{member.email === String(user?.email || '').trim().toLowerCase() ? ' · you' : ''}</strong><b>{member.score} pts</b></div>)}</div>}
+              <p className="gamepal-result-save-note" role="status">{lastGameResult.saving ? 'Saving your score and updating your records…' : lastGameResult.syncNote}</p>
+              <button type="button" className="gamepal-primary-action" onClick={() => { setLastGameResult(null); setGroupCelebration(null); setChallengeCelebration(null); }}>Back to GamePal <i className="ph ph-arrow-right"></i></button>
+            </section>
+          </div>
+        </ModalPortal>
+      )}
+
+      {challengeCelebration && !lastGameResult && (
         <ModalPortal>
           <div className={`gamepal-result-overlay outcome-${challengeCelebration.outcome}`} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setChallengeCelebration(null); }}>
             <div className="gamepal-result-particles" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 7) * -0.31}s`, '--particle-drift': `${((index * 29) % 100) - 50}px` }}></i>)}</div>
@@ -573,7 +641,7 @@ export default function GamePalHub() {
         </ModalPortal>
       )}
 
-      {groupCelebration && (
+      {groupCelebration && !lastGameResult && (
         <ModalPortal>
           <div className={`gamepal-result-overlay outcome-${groupCelebration.outcome}`} role="presentation">
             <div className="gamepal-result-particles" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 7) * -0.31}s`, '--particle-drift': `${((index * 29) % 100) - 50}px` }}></i>)}</div>

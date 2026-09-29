@@ -98,7 +98,7 @@ const getDashboardData = async (req, res) => {
             DatabaseService.getSheetData("Drive_Registration!A:J"),
             DatabaseService.getSheetData("Talentino_Schedule!A:D"),
             DatabaseService.getSheetData("Talentino_Attendance!A:J"),
-            DatabaseService.getSheetData("NewsLetter!A:U"),
+            DatabaseService.getSheetData("NewsLetter!A:W"),
             DatabaseService.getSheetData("Contact!A:H")
         ]);
 
@@ -204,7 +204,7 @@ const getDashboardData = async (req, res) => {
             let position = nlData[i][5] || "Technical Role";
             if (!company && !position) continue;
 
-            vacancies.push({ date: nlData[i][1] || "", company, position, state: nlData[i][6] || "OTHER STATES", location: nlData[i][7] || "Multiple Locations", modeOfWork: nlData[i][8] || "On-site", openings: nlData[i][9] || "01-02", qualification: nlData[i][10] || "Degree", description: nlData[i][11] || "", experience: nlData[i][12] || "Fresher", salary: nlData[i][13] || "Market Standard", interviewDate: nlData[i][15] || "Will inform once scheduled", lastDate: nlData[i][16] || "Open", course: nlData[i][4] || "All", newsletterId: nlData[i][19] || nlData[i][20] || `JOB-${1000 + i}` });
+            vacancies.push({ date: nlData[i][1] || "", company, companyLogo: nlData[i][22] || "", position, state: nlData[i][6] || "OTHER STATES", location: nlData[i][7] || "Multiple Locations", modeOfWork: nlData[i][8] || "On-site", openings: nlData[i][9] || "01-02", qualification: nlData[i][10] || "Degree", description: nlData[i][11] || "", experience: nlData[i][12] || "Fresher", salary: nlData[i][13] || "Market Standard", interviewDate: nlData[i][15] || "Will inform once scheduled", lastDate: nlData[i][16] || "Open", course: nlData[i][4] || "All", newsletterId: nlData[i][19] || nlData[i][20] || `JOB-${1000 + i}` });
         }
 
         // Process TPO Info

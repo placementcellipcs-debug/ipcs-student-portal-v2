@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import DriveImage from '../../components/ui/DriveImage';
+
+function CompanyLogo({ src, company, className = '' }) {
+  return (
+    <span className={`company-logo-frame ${className}`} role="img" aria-label={`${company || 'Company'} logo`}>
+      {src
+        ? <DriveImage src={src} alt="" aria-hidden="true"><i className="ph-fill ph-buildings" aria-hidden="true"></i></DriveImage>
+        : <i className="ph-fill ph-buildings" aria-hidden="true"></i>}
+    </span>
+  );
+}
 
 const parseSafeDate = (dateStr) => {
   if (!dateStr || dateStr === "N/A" || dateStr === "undefined" || String(dateStr).toUpperCase() === "TBA") return null;
@@ -127,6 +139,14 @@ export default function JobVacancies() {
   const requiresExperience = (vacancy) => /experienced|\d\s*\+?\s*years?|\d+\s*to\s*\d+\s*years?/i.test(String(vacancy.experience || ''));
   const studentIsFresher = /fresher|no experience|entry.level/i.test(String(user?.fresherStatus || ''));
   const modalJobExpired = jobModal ? isEventExpired(jobModal.lastDate) : false;
+  const closeJobModal = () => {
+    setJobModal(null);
+    setActionStatus(null);
+    setShowConsent(false);
+    setQ1(false);
+    setQ2(false);
+    setShowConfetti(false);
+  };
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
@@ -167,7 +187,10 @@ export default function JobVacancies() {
                  return (
                    <article className={`vacancy-card ${isExpired ? 'expired' : ''}`} key={vacancy.newsletterId}>
                      <div className="vacancy-card-topline"><span className="vacancy-id">{vacancy.newsletterId}</span><span className={`vacancy-status ${isExpired ? 'expired' : 'active'}`}>{isExpired ? 'Expired' : isApplied ? 'Applied' : 'Accepting applications'}</span></div>
-                     <div className="vacancy-title-block"><h2>{vacancy.position}</h2><p>{vacancy.company}</p></div>
+                     <div className="vacancy-title-row">
+                       <CompanyLogo src={vacancy.companyLogo} company={vacancy.company} className="vacancy-company-logo" />
+                       <div className="vacancy-title-block"><h2>{vacancy.position}</h2><p>{vacancy.company}</p></div>
+                     </div>
                      <div className="vacancy-chip-row"><span><i className="ph ph-map-pin"></i>{vacancy.location}</span><span><i className="ph ph-buildings"></i>{vacancy.modeOfWork}</span></div>
                      <dl className="vacancy-detail-grid">
                        <div><dt>Openings</dt><dd>{vacancy.openings}</dd></div>
@@ -187,106 +210,81 @@ export default function JobVacancies() {
        )}
 
       {/* PLACEMENT JOB MODAL */}
-      {jobModal && (
-        <div className="report-modal-overlay">
-          <div className="report-card" style={{ maxWidth: '600px', width: '90%', padding: '0', overflow: 'hidden', position: 'relative' }}>
-            
+      {jobModal && createPortal(
+        <div className="report-modal-overlay vacancy-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeJobModal(); }}>
+          <section className="report-card vacancy-modal-card" role="dialog" aria-modal="true" aria-labelledby="vacancy-modal-title">
             {showConfetti && (
               <div className="celebration-overlay">
                 <div className="celebration-content">
                   <span className="party-emoji">🎉</span>
-                  <h2 style={{ color: 'white', marginBottom: '10px', fontSize: '2rem' }}>Application Successful!</h2>
-                  <p style={{ color: '#a5b4fc', margin: 0, fontSize: '1.1rem' }}>Track this in Application Status.</p>
+                  <h2>Application successful!</h2>
+                  <p>Track this in Application Status.</p>
                 </div>
               </div>
             )}
-
-            <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid var(--card-border)', background: 'var(--card-bg)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.5rem', lineHeight: '1.2' }}>
-                  {jobModal.position} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>Newsletter ID: {jobModal.newsletterId}</span>
-                </h3>
-                <i className="ph ph-x" style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.4rem' }} onClick={() => { setJobModal(null); setShowConsent(false); setQ1(false); setQ2(false); setShowConfetti(false); }}></i>
+            <header className="vacancy-modal-header">
+              <div className="vacancy-modal-company-lockup">
+                <CompanyLogo src={jobModal.companyLogo} company={jobModal.company} className="vacancy-modal-logo" />
+                <div className="vacancy-modal-heading">
+                  <p>Opening details <span>·</span> {jobModal.newsletterId}</p>
+                  <h2 id="vacancy-modal-title">{jobModal.position}</h2>
+                  <strong>{jobModal.company}</strong>
+                </div>
               </div>
-              <strong style={{ color: 'var(--accent-cyan)', fontSize: '1.2rem' }}>{jobModal.company}</strong>
-            </div>
-            
-            <div style={{ padding: '2rem', maxHeight: '75vh', overflowY: 'auto' }}>
-              <div style={{ background: 'var(--input-bg)', padding: '1.2rem', borderRadius: '12px', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '0.95rem', border: '1px solid var(--input-border)' }}>
-                <div><strong style={{ color: 'var(--text-muted)' }}>Location:</strong> <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{jobModal.location}</span></div>
-                <div><strong style={{ color: 'var(--text-muted)' }}>Mode of Work:</strong> <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{jobModal.modeOfWork}</span></div>
-                <div><strong style={{ color: 'var(--text-muted)' }}>Openings:</strong> <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{jobModal.openings}</span></div>
-                <div><strong style={{ color: 'var(--text-muted)' }}>Experience:</strong> <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{jobModal.experience}</span></div>
-                <div><strong style={{ color: 'var(--text-muted)' }}>Salary:</strong> <span style={{ color: 'var(--accent-cyan)', fontWeight: 800 }}>{jobModal.salary}</span></div>
-                <div><strong style={{ color: 'var(--text-muted)' }}>Interview Date:</strong> <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{jobModal.interviewDate}</span></div>
-              </div>
-              
-              <div style={{ marginBottom: '1.5rem' }}>
-                <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '6px', fontSize: '1rem' }}>Qualification Required:</strong>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: '1.5' }}>{jobModal.qualification}</div>
-              </div>
-
+              <button type="button" className="vacancy-modal-close" aria-label="Close opening details" onClick={closeJobModal}><i className="ph ph-x" aria-hidden="true"></i></button>
+            </header>
+            <div className="vacancy-modal-body">
+              <dl className="vacancy-modal-meta">
+                <div><dt>Location</dt><dd>{jobModal.location}</dd></div>
+                <div><dt>Work mode</dt><dd>{jobModal.modeOfWork}</dd></div>
+                <div><dt>Openings</dt><dd>{jobModal.openings}</dd></div>
+                <div><dt>Experience</dt><dd>{jobModal.experience}</dd></div>
+                <div><dt>Salary</dt><dd>{jobModal.salary}</dd></div>
+                <div><dt>Interview date</dt><dd>{jobModal.interviewDate}</dd></div>
+                <div><dt>Apply by</dt><dd>{jobModal.lastDate}</dd></div>
+              </dl>
+              <section className="vacancy-modal-section">
+                <h3>Qualification required</h3>
+                <p>{jobModal.qualification || 'Details will be shared by the placement team.'}</p>
+              </section>
               {jobModal.description && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '8px', fontSize: '1rem' }}>Job Description:</strong>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.95rem', whiteSpace: 'pre-line', background: 'var(--bg-dark)', padding: '16px', borderRadius: '12px', border: '1px solid var(--card-border)', lineHeight: '1.6' }}>
-                    {jobModal.description}
-                  </div>
-                </div>
+                <section className="vacancy-modal-section">
+                  <h3>Job description</h3>
+                  <div className="vacancy-modal-description">{jobModal.description}</div>
+                </section>
               )}
-
               {modalJobExpired ? (
-                <div className="alert alert-warning vacancy-expired-notice">
-                  <i className="ph-fill ph-clock-countdown" aria-hidden="true"></i>
-                  <span>This opening has expired. Applications are closed, but you can still review its details.</span>
-                  <button type="button" className="btn-cancel" onClick={() => setJobModal(null)}>Close</button>
-                </div>
+                <div className="vacancy-modal-notice expired"><i className="ph-fill ph-clock-countdown" aria-hidden="true"></i><span>This opening has expired. Applications are closed, but you can still review its details.</span></div>
+              ) : requiresExperience(jobModal) && studentIsFresher ? (
+                <div className="vacancy-modal-notice"><i className="ph ph-info" aria-hidden="true"></i><span>This role requires prior experience. You can review its details, but applications are disabled for your fresher profile.</span></div>
               ) : showConsent ? (
-                <div style={{ background: 'var(--bg-dark)', padding: '20px', borderRadius: '16px', border: '1px solid var(--card-border)' }}>
-                  {actionStatus && actionStatus.type === 'error' && actionStatus.message.includes('Resume') ? (
-                    <div className="alert alert-error" style={{ margin: 0, padding: '1.5rem', textAlign: 'left', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                      <i className="ph-fill ph-warning-circle" style={{ fontSize: '2rem', display: 'block', marginBottom: '10px' }}></i>
-                      {actionStatus.message}
-                    </div>
+                <section className="vacancy-consent-panel" aria-label="Application consent">
+                  {actionStatus?.type === 'error' && actionStatus.message.includes('Resume') ? (
+                    <div className="alert alert-error"><i className="ph-fill ph-warning-circle" aria-hidden="true"></i><span>{actionStatus.message}</span></div>
                   ) : (
                     <>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px', background: 'var(--input-bg)', padding: '12px', borderRadius: '10px' }}>
-                        <input type="checkbox" checked={q1} onChange={e => setQ1(e.target.checked)} style={{ width: '22px', height: '22px', flexShrink: 0, marginTop: '2px', cursor: 'pointer' }} />
-                        <p style={{ color: 'var(--text-main)', fontSize: '0.9rem', margin: 0, fontWeight: 500, lineHeight: 1.5 }}>
-                          1. As I am applying for this job, I agree that I will attend the interview whenever the company calls me without fail.
-                        </p>
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '20px', background: 'var(--input-bg)', padding: '12px', borderRadius: '10px' }}>
-                        <input type="checkbox" checked={q2} onChange={e => setQ2(e.target.checked)} style={{ width: '22px', height: '22px', flexShrink: 0, marginTop: '2px', cursor: 'pointer' }} />
-                        <p style={{ color: 'var(--text-main)', fontSize: '0.9rem', margin: 0, fontWeight: 500, lineHeight: 1.5 }}>
-                          2. I agree as per Placement rules if I fail to attend this company interview, I will be removed from placement support.
-                        </p>
-                      </div>
-                      
-                      {actionStatus && <div className={`alert alert-${actionStatus.type}`} style={{ marginBottom: '15px' }}>{actionStatus.message}</div>}
-                      
-                      <button 
-                        className="btn-action" 
-                        style={{ width: '100%', background: (q1 && q2) ? '#10b981' : 'var(--input-border)', color: (q1 && q2) ? '#fff' : 'var(--text-muted)', padding: '1rem', fontSize: '1rem', cursor: (q1 && q2) ? 'pointer' : 'not-allowed', transition: 'background 0.3s' }} 
-                        onClick={handleApply}
-                      >
-                        {actionStatus?.type === 'info' ? 'Submitting...' : 'Confirm & Submit Application'}
-                      </button>
+                      <label><input type="checkbox" checked={q1} onChange={(event) => setQ1(event.target.checked)} /><span>I agree to attend the interview whenever the company contacts me.</span></label>
+                      <label><input type="checkbox" checked={q2} onChange={(event) => setQ2(event.target.checked)} /><span>I understand that missing the interview may affect my placement support.</span></label>
+                      {actionStatus && <div className={'alert alert-' + actionStatus.type} role={actionStatus.type === 'error' ? 'alert' : 'status'}>{actionStatus.message}</div>}
                     </>
                   )}
-                </div>
-              ) : requiresExperience(jobModal) && studentIsFresher ? (
-                <div className="vacancy-eligibility-note"><i className="ph ph-info"></i><span>This opening requires prior experience. You can review the details, but your current profile is marked as a fresher, so applications are disabled.</span><button className="btn-cancel" onClick={() => setJobModal(null)}>Close</button></div>
-              ) : (
-                <div style={{ display: 'flex', gap: '15px', marginTop: '2rem' }}>
-                  <button className="btn-action" style={{ flex: 2, background: '#10b981', padding: '1rem', fontSize: '1rem' }} onClick={openApplyConfirm}>Apply Now &rarr;</button>
-                  <button className="btn-cancel" style={{ flex: 1, padding: '1rem', fontSize: '1rem' }} onClick={() => { setJobModal(null); setShowConsent(false); setQ1(false); setQ2(false); }}>Close</button>
-                </div>
-              )}
+                </section>
+              ) : null}
             </div>
-          </div>
-        </div>
+            <footer className="vacancy-modal-footer">
+              {modalJobExpired || (requiresExperience(jobModal) && studentIsFresher) ? (
+                <button type="button" className="btn-cancel" onClick={closeJobModal}>Close</button>
+              ) : showConsent ? actionStatus?.type === 'error' && actionStatus.message.includes('Resume') ? (
+                <><Link className="btn-action" to="/dashboard/profile" onClick={closeJobModal}>Go to profile</Link><button type="button" className="btn-cancel" onClick={closeJobModal}>Close</button></>
+              ) : (
+                <><button type="button" className="btn-action vacancy-apply-confirm" onClick={handleApply} disabled={!q1 || !q2 || actionStatus?.type === 'info'}>{actionStatus?.type === 'info' ? 'Submitting…' : 'Confirm & submit application'}</button><button type="button" className="btn-cancel" onClick={closeJobModal}>Cancel</button></>
+              ) : (
+                <><button type="button" className="btn-action" onClick={openApplyConfirm}>Apply now <i className="ph ph-arrow-right" aria-hidden="true"></i></button><button type="button" className="btn-cancel" onClick={closeJobModal}>Close</button></>
+              )}
+            </footer>
+          </section>
+        </div>,
+        document.body,
       )}
     </div>
   );

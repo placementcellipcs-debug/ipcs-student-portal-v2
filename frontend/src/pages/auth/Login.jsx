@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../config/axios';
 import Counter from '../../components/ui/Counter';
 import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
+import talenzoLogo from '../../assets/TALENZO111.png';
 
 // Import Assets
 import loadingVideo from '../../assets/video.mp4';
@@ -137,7 +138,7 @@ export default function Login() {
               <span style={{ position: 'relative', display: 'inline-flex', borderRadius: '50%', height: '14px', width: '14px', background: '#38bdf8' }}></span>
             </span>
             
-            <span className="login-brand-animate login-welcome-label">WELCOME TO IPCS GLOBAL</span>
+            <img className="login-brand-animate login-welcome-logo" src={talenzoLogo} alt="Talenzo" />
           </div>
           
           <h1 className="hero-title">Unlock Global Tech<br/><span style={{ color: '#38bdf8' }}>Careers with IPCS</span></h1>

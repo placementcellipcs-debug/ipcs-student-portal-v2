@@ -1424,6 +1424,69 @@ select { cursor: pointer; }
   .vacancy-expired-notice .btn-cancel { margin-left: 32px; }
 }
 
+/* Job opening cards and details modal */
+.company-logo-frame { display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; border: 1px solid var(--card-border); border-radius: 14px; background: #fff; color: #64748b; }
+.company-logo-frame img { display: block; width: 100%; height: 100%; padding: 5px; object-fit: contain; }
+.company-logo-frame > i { font-size: 1.35rem; }
+.vacancy-title-row { display: flex; align-items: center; gap: 11px; min-width: 0; margin: 13px 0 10px; }
+.vacancy-title-row .vacancy-company-logo { width: 42px; height: 42px; border-radius: 12px; }
+.vacancy-title-row .vacancy-title-block { min-width: 0; margin: 0; }
+.vacancy-title-row .vacancy-title-block h2, .vacancy-title-row .vacancy-title-block p { overflow-wrap: anywhere; }
+.vacancy-modal-overlay { inset: 0; width: 100%; height: 100dvh; min-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+.vacancy-modal-card { position: relative; display: flex; flex-direction: column; width: min(100%, 760px); height: min(88dvh, 850px); max-height: calc(100dvh - 40px); padding: 0; overflow: hidden; border-radius: 24px; animation: vacancy-modal-arrive .22s cubic-bezier(.2,.75,.25,1) both; }
+.vacancy-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex: 0 0 auto; padding: clamp(17px, 3vw, 25px); border-bottom: 1px solid var(--card-border); background: color-mix(in srgb, var(--card-bg) 94%, var(--accent-blue)); }
+.vacancy-modal-company-lockup { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.vacancy-modal-logo { width: 64px; height: 64px; border-radius: 17px; }
+.vacancy-modal-logo > i { font-size: 1.8rem; }
+.vacancy-modal-heading { display: grid; min-width: 0; gap: 4px; }
+.vacancy-modal-heading > p { margin: 0; color: var(--text-muted); font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.vacancy-modal-heading > p span { color: var(--accent-cyan); }
+.vacancy-modal-heading > h2 { margin: 0; overflow-wrap: anywhere; color: var(--text-main); font-size: clamp(1.12rem, 2.7vw, 1.6rem); line-height: 1.22; }
+.vacancy-modal-heading > strong { overflow-wrap: anywhere; color: var(--accent-cyan); font-size: .9rem; }
+.vacancy-modal-close { display: grid; place-items: center; flex: 0 0 auto; width: 38px; height: 38px; border: 1px solid var(--card-border); border-radius: 12px; background: var(--input-bg); color: var(--text-muted); cursor: pointer; font-size: 1.1rem; transition: color .18s ease, border-color .18s ease, transform .18s ease; }
+.vacancy-modal-close:hover { transform: rotate(5deg); border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.vacancy-modal-body { flex: 1 1 auto; min-height: 0; padding: clamp(17px, 3vw, 25px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-gutter: stable; }
+.vacancy-modal-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0 0 23px; overflow: hidden; border: 1px solid var(--card-border); border-radius: 16px; background: var(--card-border); }
+.vacancy-modal-meta > div { min-width: 0; padding: 13px 15px; background: color-mix(in srgb, var(--input-bg) 88%, var(--card-bg)); }
+.vacancy-modal-meta dt { margin: 0 0 5px; color: var(--text-muted); font-size: .65rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.vacancy-modal-meta dd { margin: 0; overflow-wrap: anywhere; color: var(--text-main); font-size: .84rem; font-weight: 750; line-height: 1.4; }
+.vacancy-modal-meta > div:nth-child(5) dd { color: var(--accent-cyan); }
+.vacancy-modal-section { margin: 0 0 20px; }
+.vacancy-modal-section h3 { margin: 0 0 8px; color: var(--text-main); font-size: .9rem; }
+.vacancy-modal-section > p { margin: 0; color: var(--text-muted); font-size: .84rem; line-height: 1.6; }
+.vacancy-modal-description { padding: 15px 16px; border: 1px solid var(--card-border); border-radius: 14px; background: var(--bg-dark); color: var(--text-muted); font-size: .82rem; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.vacancy-modal-notice { display: flex; align-items: flex-start; gap: 10px; margin-top: 19px; padding: 13px 15px; border: 1px solid rgba(245,158,11,.28); border-radius: 13px; background: rgba(245,158,11,.09); color: var(--text-main); font-size: .8rem; line-height: 1.5; }
+.vacancy-modal-notice > i { flex: 0 0 auto; color: #f59e0b; font-size: 1.1rem; }
+.vacancy-modal-notice.expired { border-color: rgba(148,163,184,.26); background: var(--input-bg); }
+.vacancy-modal-notice.expired > i { color: var(--text-muted); }
+.vacancy-consent-panel { display: grid; gap: 10px; margin-top: 20px; padding: 16px; border: 1px solid var(--card-border); border-radius: 16px; background: var(--input-bg); }
+.vacancy-consent-panel > label { display: flex; align-items: flex-start; gap: 10px; color: var(--text-main); font-size: .8rem; line-height: 1.5; cursor: pointer; }
+.vacancy-consent-panel input { flex: 0 0 auto; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--accent-cyan); }
+.vacancy-consent-panel .alert { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 12px; font-size: .8rem; }
+.vacancy-modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex: 0 0 auto; padding: 14px clamp(17px, 3vw, 25px) max(14px, env(safe-area-inset-bottom)); border-top: 1px solid var(--card-border); background: var(--card-bg); }
+.vacancy-modal-footer > .btn-action, .vacancy-modal-footer > .btn-cancel { min-height: 43px; padding: 10px 17px; }
+.vacancy-modal-footer > .btn-action { background: #10b981; }
+.vacancy-modal-footer > .btn-action:disabled { border-color: var(--input-border); background: var(--input-border); color: var(--text-muted); cursor: not-allowed; }
+.vacancy-modal-footer > .btn-cancel { min-width: 100px; }
+.vacancy-modal-footer .btn-action { text-decoration: none; }
+.celebration-content h2 { margin: 10px 0; color: #fff; font-size: 1.8rem; }
+.celebration-content p { margin: 0; color: #c7d2fe; font-size: .95rem; }
+@keyframes vacancy-modal-arrive { from { opacity: 0; transform: translateY(9px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (max-width: 620px) {
+  .login-welcome-logo { width: min(190px, 58vw); max-height: 52px; }
+  .vacancy-modal-overlay { align-items: stretch; padding: 0; }
+  .vacancy-modal-card { width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+  .vacancy-modal-header { padding-top: max(16px, env(safe-area-inset-top)); }
+  .vacancy-modal-logo { width: 54px; height: 54px; border-radius: 14px; }
+  .vacancy-modal-meta > div { padding: 11px 12px; }
+  .vacancy-modal-footer { flex-wrap: wrap; }
+  .vacancy-modal-footer > .btn-action, .vacancy-modal-footer > .btn-cancel { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vacancy-modal-card { animation: none; }
+  .vacancy-modal-close { transition: none; }
+}
+
 /* Consistent, restrained motion throughout the student portal. */
 .portal-back-dashboard { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; margin: 0 0 16px; padding: 9px 14px; border: 1px solid var(--card-border); border-radius: 12px; background: color-mix(in srgb, var(--card-bg) 86%, transparent); color: var(--text-main); font-size: .82rem; font-weight: 750; text-decoration: none; box-shadow: 0 7px 20px rgba(0,0,0,.08); transition: transform .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease; }
 .portal-back-dashboard > i { color: var(--accent-cyan); font-size: 1.05rem; transition: transform .2s ease; }

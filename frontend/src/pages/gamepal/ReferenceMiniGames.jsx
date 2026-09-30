@@ -267,14 +267,15 @@ function Zip({ game, onComplete, onExit }) {
   </GameFrame>;
 }
 
+const SUDOKU_SIZE = 4;
 const makeSudokuPuzzle = (level) => {
-  const base = Array.from({ length: SIZE }, (_, row) => Array.from({ length: SIZE }, (_, column) => ((row * 3 + Math.floor(row / 2) + column) % SIZE) + 1));
-  const rowOrder = shuffle([[0, 1], [2, 3], [4, 5]]).flatMap((band) => shuffle(band));
-  const columnOrder = shuffle([[0, 1, 2], [3, 4, 5]]).flatMap((stack) => shuffle(stack));
-  const digits = shuffle([1, 2, 3, 4, 5, 6]);
-  const digitMap = new Map([1, 2, 3, 4, 5, 6].map((number, index) => [number, digits[index]]));
+  const base = Array.from({ length: SUDOKU_SIZE }, (_, row) => Array.from({ length: SUDOKU_SIZE }, (_, column) => ((row * 2 + Math.floor(row / 2) + column) % SUDOKU_SIZE) + 1));
+  const rowOrder = shuffle([[0, 1], [2, 3]]).flatMap((band) => shuffle(band));
+  const columnOrder = shuffle([[0, 1], [2, 3]]).flatMap((stack) => shuffle(stack));
+  const digits = shuffle([1, 2, 3, 4]);
+  const digitMap = new Map([1, 2, 3, 4].map((number, index) => [number, digits[index]]));
   const solution = rowOrder.map((row) => columnOrder.map((column) => digitMap.get(base[row][column])));
-  const blanks = new Set(shuffle(Array.from({ length: SIZE * SIZE }, (_, index) => `${Math.floor(index / SIZE)},${index % SIZE}`)).slice(0, Math.min(22, 8 + Math.max(1, Math.min(5, level)) * 2)));
+  const blanks = new Set(shuffle(Array.from({ length: SUDOKU_SIZE * SUDOKU_SIZE }, (_, index) => `${Math.floor(index / SUDOKU_SIZE)},${index % SUDOKU_SIZE}`)).slice(0, Math.min(10, 6 + Math.max(1, Math.min(5, level)))));
   return { solution, blanks };
 };
 function MiniSudoku({ game, onComplete, onExit, initialLevel = 1 }) {
@@ -284,7 +285,7 @@ function MiniSudoku({ game, onComplete, onExit, initialLevel = 1 }) {
   const [selected, setSelected] = useState(null);
   const [message, setMessage] = useState('Fill each row, column, and 2 × 3 box with 1–6.');
   const [startedAt] = useState(() => Date.now());
-  const givensCount = SIZE * SIZE - blanks.size;
+  const givensCount = SUDOKU_SIZE * SUDOKU_SIZE - blanks.size;
   const board = useMemo(() => solution.map((row, rowIndex) => row.map((value, column) => {
     const key = `${rowIndex},${column}`;
     return blanks.has(key) ? (entries[key] || 0) : value;
@@ -297,20 +298,20 @@ function MiniSudoku({ game, onComplete, onExit, initialLevel = 1 }) {
   const check = () => {
     const filled = board.every((row) => row.every((value) => value > 0));
     if (!filled) { setMessage(`${blanks.size - Object.values(entries).filter(Boolean).length} spaces left. Keep going.`); return; }
-    const validRows = board.every((row) => new Set(row).size === SIZE);
-    const validColumns = Array.from({ length: SIZE }, (_, column) => new Set(board.map((row) => row[column])).size === SIZE).every(Boolean);
-    const validBoxes = [0, 2, 4].every((columnStart) => [0, 2, 4].every((rowStart) => {
-      const values = [board[rowStart][columnStart], board[rowStart][columnStart + 1], board[rowStart][columnStart + 2], board[rowStart + 1][columnStart], board[rowStart + 1][columnStart + 1], board[rowStart + 1][columnStart + 2]];
-      return new Set(values).size === SIZE;
+    const validRows = board.every((row) => new Set(row).size === SUDOKU_SIZE);
+    const validColumns = Array.from({ length: SUDOKU_SIZE }, (_, column) => new Set(board.map((row) => row[column])).size === SUDOKU_SIZE).every(Boolean);
+    const validBoxes = [0, 2].every((columnStart) => [0, 2].every((rowStart) => {
+      const values = [board[rowStart][columnStart], board[rowStart][columnStart + 1], board[rowStart + 1][columnStart], board[rowStart + 1][columnStart + 1]];
+      return new Set(values).size === SUDOKU_SIZE;
     }));
     const valid = validRows && validColumns && validBoxes;
     setMessage(valid ? 'The grid is complete. Every row, column, and box checks out!' : 'There is a repeated or incorrect value. Review your row, column, and box.');
     if (valid) finish(game, onComplete, startedAt, puzzleScore(startedAt, 240 + blanks.size * 4), 100);
   };
-  return <GameFrame game={game} onExit={onExit} prompt="Complete the 6 × 6 Sudoku. Each row, column, and 2 × 3 box must contain numbers 1 through 6 once.">
+  return <GameFrame game={game} onExit={onExit} prompt="Complete the 4 × 4 Sudoku. Each row, column, and 2 × 2 box must contain numbers 1 through 4 once.">
     <div className="sudoku-toolbar"><span><i className="ph ph-grid-four"></i> {givensCount} clues</span><button type="button" onClick={() => setEntries({})}>Clear entries</button></div>
-    <div className="mini-sudoku-board" role="group" aria-label="6 by 6 Sudoku puzzle">{board.flatMap((row, rowIndex) => row.map((value, column) => { const blank = blanks.has(`${rowIndex},${column}`); const isSelected = selected?.row === rowIndex && selected?.column === column; return <button type="button" key={`${rowIndex}-${column}`} className={`${blank ? 'editable' : ''} ${isSelected ? 'selected' : ''}`} onClick={() => blank && setSelected({ row: rowIndex, column })} aria-label={`Row ${rowIndex + 1}, column ${column + 1}${value ? `, ${value}` : ', empty'}`}>{value || ''}</button>; }))}</div>
-    <div className="sudoku-number-pad">{Array.from({ length: SIZE }, (_, index) => <button type="button" key={index + 1} onClick={() => enterNumber(index + 1)} disabled={!selected} aria-pressed={selected ? entries[`${selected.row},${selected.column}`] === index + 1 : false}>{index + 1}</button>)}<button type="button" className="sudoku-erase" onClick={() => { if (selected) setEntries((current) => ({ ...current, [`${selected.row},${selected.column}`]: 0 })); }} disabled={!selected}><i className="ph ph-backspace"></i></button></div>
+    <div className="mini-sudoku-board sudoku-four" role="group" aria-label="4 by 4 Sudoku puzzle">{board.flatMap((row, rowIndex) => row.map((value, column) => { const blank = blanks.has(`${rowIndex},${column}`); const isSelected = selected?.row === rowIndex && selected?.column === column; return <button type="button" key={`${rowIndex}-${column}`} className={`${blank ? 'editable' : ''} ${isSelected ? 'selected' : ''}`} onClick={() => blank && setSelected({ row: rowIndex, column })} aria-label={`Row ${rowIndex + 1}, column ${column + 1}${value ? `, ${value}` : ', empty'}`}>{value || ''}</button>; }))}</div>
+    <div className="sudoku-number-pad">{Array.from({ length: SUDOKU_SIZE }, (_, index) => <button type="button" key={index + 1} onClick={() => enterNumber(index + 1)} disabled={!selected} aria-pressed={selected ? entries[`${selected.row},${selected.column}`] === index + 1 : false}>{index + 1}</button>)}<button type="button" className="sudoku-erase" onClick={() => { if (selected) setEntries((current) => ({ ...current, [`${selected.row},${selected.column}`]: 0 })); }} disabled={!selected}><i className="ph ph-backspace"></i></button></div>
     <div className="reference-game-actions"><button type="button" className="reference-game-primary" onClick={check}>Check puzzle <i className="ph ph-check"></i></button></div>
     <p className="reference-game-feedback" role="status">{message}</p>
   </GameFrame>;

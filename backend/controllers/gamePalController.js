@@ -11,6 +11,8 @@ const ROOM_GAME_NAMES = {
     crossclimb: 'Crossclimb', queens: 'Queens', tango: 'Tango', zip: 'Zip', 'mini-sudoku': 'Mini Sudoku',
     patches: 'Patches', wend: 'Wend', knifeshow: 'Knife Show', snowrider: 'Snow Rider 3D', dino: 'Dino Runner',
     chess: 'Chess', 'word-association': 'Word Association', 'ludo-king': 'Ludo King', 'snakes-ladders': 'Snakes & Ladders',
+    '2048': '2048', minesweeper: 'Minesweeper', 'connect-4': 'Connect 4', wordle: 'Wordle',
+    snake: 'Snake', 'flappy-bird': 'Flappy Bird', 'brick-breaker': 'Brick Breaker',
 };
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const gamePalSpreadsheetId = () => process.env.GAMEPAL_SPREADSHEET_ID || process.env.SPREADSHEET_ID;

@@ -2,7 +2,8 @@ const GAME_ART = {
   memory: '🧠', attention: '🎯', language: '🔤', math: '∑', logic: '🧩', flexibility: '🔀', speed: '⚡',
   pinpoint: '🧭', crossclimb: '🪜', queens: '♛', tango: '☯', zip: '🧵', 'mini-sudoku': '🔢', patches: '🟪', wend: '📝',
   knifeshow: '🗡️', snowrider: '🛷', dino: '🦖', chess: '♟️', 'word-association': '🔠',
-  'ludo-king': '🎲', 'snakes-ladders': '🐍',
+  'ludo-king': '🎲', 'snakes-ladders': '🐍', '2048': '🔢', minesweeper: '💣',
+  'connect-4': '🔴', wordle: '🟩', snake: '🐍', 'flappy-bird': '🐤', 'brick-breaker': '🧱',
 };
 
 export default function GameArtwork({ game, compact = false }) {

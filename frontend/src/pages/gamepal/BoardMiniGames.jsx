@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const COLORS = [
   { name: 'Ruby', hex: '#fb5c69', tint: 'rgba(251,92,105,.16)', start: 47 },
@@ -14,16 +14,23 @@ const TRACK = (() => {
   for (let row = 13; row >= 2; row -= 1) cells.push([row, 1]);
   return cells;
 })();
+const SAFE_TRACK_POSITIONS = new Set([...COLORS.map((color) => color.start), 0, 8, 13, 21, 26, 34, 39, 47]);
+const HOME_STRETCHES = [
+  Array.from({ length: 5 }, (_, index) => [2 + index, 7]),
+  Array.from({ length: 5 }, (_, index) => [7, 13 - index]),
+  Array.from({ length: 5 }, (_, index) => [13 - index, 8]),
+  Array.from({ length: 5 }, (_, index) => [8, 2 + index]),
+];
 const SNAKES = { 16: 6, 47: 26, 49: 11, 56: 53, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 98: 78 };
 const LADDERS = { 2: 23, 8: 34, 20: 77, 32: 68, 41: 79, 50: 91, 71: 92, 80: 99 };
 const PLAYERS = ['You', 'Player 2', 'Player 3', 'Player 4'];
 const elapsedSeconds = (startedAt) => Math.max(1, Math.round((Date.now() - startedAt) / 1000));
 const finishGame = (onComplete, game, score, accuracy, startedAt) => onComplete(game.name, game.category, score, accuracy, elapsedSeconds(startedAt));
 
-function BoardShell({ game, onExit, children, turn }) {
+function BoardShell({ game, onExit, children, turn, modeLabel = 'PASS & PLAY' }) {
   return <main className="cognitive-game-screen board-game-screen">
-    <header className="cognitive-game-topbar"><button type="button" className="btn-cancel" onClick={onExit}><i className="ph ph-arrow-left"></i> Exit game</button><div className="cognitive-game-top-meta"><span>{game.category.toUpperCase()}</span><span>PASS & PLAY</span></div><span className="cognitive-game-score"><i className={`ph-fill ${game.icon}`}></i> {game.name}</span></header>
-    <div className="board-game-wrap">{turn && <div className="board-turn-banner" style={{ '--turn-tint': turn.color }}><span className="board-turn-dot"></span><div><small>UP NEXT</small><strong>{turn.name}</strong></div><span className="board-turn-caption">Pass the device to the next player</span></div>}{children}</div>
+      <header className="cognitive-game-topbar"><button type="button" className="btn-cancel" onClick={onExit}><i className="ph ph-arrow-left"></i> Exit game</button><div className="cognitive-game-top-meta"><span>{game.category.toUpperCase()}</span><span>{modeLabel}</span></div><span className="cognitive-game-score"><i className={`ph-fill ${game.icon}`}></i> {game.name}</span></header>
+    <div className="board-game-wrap">{turn && <div className="board-turn-banner" style={{ '--turn-tint': turn.color }}><span className="board-turn-dot"></span><div><small>UP NEXT</small><strong>{turn.name}</strong></div><span className="board-turn-caption">{modeLabel === 'VS ROBOTS' && turn.name.includes('CPU') ? 'Computer is taking its turn' : 'Pass the device to the next player'}</span></div>}{children}</div>
     <p className="cognitive-game-footnote">A friendly pass-and-play game. Scores are saved to your GamePal player profile.</p>
   </main>;
 }
@@ -34,6 +41,8 @@ function PlayerCountPicker({ count, setCount, locked }) {
 
 function LudoKing({ game, onComplete, onExit }) {
   const [playerCount, setPlayerCount] = useState(2);
+  const [mode, setMode] = useState('robot');
+  const [hasStarted, setHasStarted] = useState(false);
   const [tokens, setTokens] = useState(() => Array.from({ length: 4 }, () => Array(4).fill(-1)));
   const [turn, setTurn] = useState(0);
   const [die, setDie] = useState(null);
@@ -42,20 +51,25 @@ function LudoKing({ game, onComplete, onExit }) {
   const [finished, setFinished] = useState(false);
   const startedAt = useRef(0);
   useEffect(() => { startedAt.current = Date.now(); }, []);
-  const players = useMemo(() => COLORS.slice(0, playerCount).map((color, index) => ({ ...color, name: index === 0 ? 'You' : PLAYERS[index] })), [playerCount]);
+  const players = useMemo(() => {
+    const count = mode === 'robot' ? 4 : playerCount;
+    return COLORS.slice(0, count).map((color, index) => ({ ...color, name: index === 0 ? 'You' : mode === 'robot' ? `${['', 'Nova', 'Pixel', 'Echo'][index]} · CPU` : PLAYERS[index] }));
+  }, [mode, playerCount]);
+  const activePlayerCount = mode === 'robot' ? 4 : playerCount;
 
-  const complete = (next, winner) => {
+  const complete = useCallback((next, winner) => {
     setFinished(true);
     setNotice(`${winner.name} brought every token home. A brilliant finish!`);
     const userPiecesHome = next[0].filter((step) => step === 56).length;
     const userProgress = next[0].reduce((sum, step) => sum + Math.max(0, step), 0);
     const score = winner.name === 'You' ? 1000 : 100 + Math.round((userProgress / 224) * 700);
     finishGame(onComplete, game, score, Math.round((userPiecesHome / 4) * 100), startedAt.current);
-  };
-  const nextPlayer = () => setTurn((current) => (current + 1) % playerCount);
+  }, [game, onComplete]);
+  const nextPlayer = useCallback(() => setTurn((current) => (current + 1) % activePlayerCount), [activePlayerCount]);
 
-  const rollDie = () => {
+  const rollDie = useCallback(() => {
     if (finished || rolling || die !== null) return;
+    setHasStarted(true);
     setRolling(true);
     window.setTimeout(() => {
       const value = Math.floor(Math.random() * 6) + 1;
@@ -67,9 +81,9 @@ function LudoKing({ game, onComplete, onExit }) {
         window.setTimeout(() => { setDie(null); nextPlayer(); }, 900);
       } else setNotice(`${players[turn].name} rolled ${value}. Choose one highlighted token.`);
     }, 420);
-  };
+  }, [die, finished, nextPlayer, players, rolling, tokens, turn]);
 
-  const moveToken = (tokenIndex) => {
+  const moveToken = useCallback((tokenIndex) => {
     if (finished || rolling || die === null) return;
     const step = tokens[turn][tokenIndex];
     if (step === -1 && die !== 6) return;
@@ -80,8 +94,7 @@ function LudoKing({ game, onComplete, onExit }) {
     let captured = 0;
     if (newStep <= 51) {
       const landing = (players[turn].start + newStep) % 52;
-      const safeSquares = new Set([...players.map((player) => player.start), 0, 8, 13, 21, 26, 34, 39, 47]);
-      const safe = safeSquares.has(landing);
+      const safe = SAFE_TRACK_POSITIONS.has(landing);
       if (!safe) {
         next.forEach((pieces, opponent) => {
           if (opponent === turn) return;
@@ -101,7 +114,26 @@ function LudoKing({ game, onComplete, onExit }) {
     setNotice(captured ? `Capture! ${captured} rival token${captured > 1 ? 's' : ''} sent back to the yard.` : newStep === 56 ? 'Token home! Exact landing.' : again ? 'Six rolled — take another turn.' : `${players[turn].name} moved a token ${die} space${die === 1 ? '' : 's'}.`);
     setDie(null);
     if (!again) nextPlayer();
-  };
+  }, [complete, die, finished, nextPlayer, players, rolling, tokens, turn]);
+  useEffect(() => {
+    if (mode !== 'robot' || turn === 0 || finished || rolling) return undefined;
+    const timer = window.setTimeout(() => {
+      if (die === null) { rollDie(); return; }
+      const choices = tokens[turn].map((step, index) => ({ step, index })).filter(({ step }) => step === -1 ? die === 6 : step + die <= 56);
+      if (!choices.length) return;
+      const projected = choices.map(({ step, index }) => {
+        const nextStep = step < 0 ? 0 : step + die;
+        const landing = nextStep <= 51 ? (players[turn].start + nextStep) % 52 : -1;
+        const safe = landing < 0 || SAFE_TRACK_POSITIONS.has(landing);
+        const captures = !safe && tokens.some((pieces, opponent) => opponent !== turn && pieces.some((opponentStep) => opponentStep >= 0 && opponentStep <= 51 && (players[opponent].start + opponentStep) % 52 === landing));
+        const enters = step < 0;
+        const reachesHome = nextStep === 56;
+        return { index, value: (captures ? 100 : 0) + (reachesHome ? 80 : 0) + (enters ? 30 : 0) + nextStep + Math.random() * 4 };
+      }).sort((left, right) => right.value - left.value);
+      moveToken(projected[0].index);
+    }, die === null ? 520 : 460);
+    return () => window.clearTimeout(timer);
+  }, [die, finished, mode, moveToken, players, playerCount, rollDie, rolling, tokens, turn]);
 
   const locationFor = (player, step, tokenIndex) => {
     if (step < 0) {
@@ -114,23 +146,21 @@ function LudoKing({ game, onComplete, onExit }) {
   };
   const canMove = (step) => die !== null && (step === -1 ? die === 6 : step + die <= 56);
 
-  return <BoardShell game={game} onExit={onExit} turn={{ name: players[turn].name, color: players[turn].hex }}>
+  return <BoardShell game={game} onExit={onExit} turn={{ name: players[turn].name, color: players[turn].hex }} modeLabel={mode === 'robot' ? 'VS ROBOTS' : 'PASS & PLAY'}>
     <section className="board-game-card ludo-card">
-      <div className="board-game-heading"><div><p className="eyebrow">THE CLASSIC RACE HOME</p><h1>Roll. Race. Bring your team home.</h1><p>Take turns on one device. Roll a six to enter the track, capture rival tokens, and finish with an exact roll.</p></div><PlayerCountPicker count={playerCount} setCount={(count) => { setPlayerCount(count); setTokens(Array.from({ length: 4 }, () => Array(4).fill(-1))); setTurn(0); setDie(null); }} locked={tokens.some((row) => row.some((step) => step !== -1))} /></div>
+      <div className="board-game-heading"><div><p className="eyebrow">THE CLASSIC RACE HOME</p><h1>Roll. Race. Bring your team home.</h1><p>Six to enter the track, exact rolls to finish. Capture rivals on open squares or stay safe on stars.</p><div className="ludo-mode-picker"><button type="button" className={mode === 'robot' ? 'active' : ''} disabled={hasStarted} onClick={() => { setMode('robot'); setPlayerCount(2); setTokens(Array.from({ length: 4 }, () => Array(4).fill(-1))); setTurn(0); setDie(null); setFinished(false); }}>🤖 Play with robot</button><button type="button" className={mode === 'friends' ? 'active' : ''} disabled={hasStarted} onClick={() => { setMode('friends'); setPlayerCount(2); setTokens(Array.from({ length: 4 }, () => Array(4).fill(-1))); setTurn(0); setDie(null); setFinished(false); }}>👥 Play with friends</button></div></div>{mode === 'friends' ? <PlayerCountPicker count={playerCount} setCount={(count) => { setPlayerCount(count); setTokens(Array.from({ length: 4 }, () => Array(4).fill(-1))); setTurn(0); setDie(null); }} locked={hasStarted} /> : <span className="ludo-mode-badge">You vs 3 CPU players</span>}</div>
       <div className="ludo-board-wrap"><div className="ludo-board" role="grid" aria-label="Ludo board">
-        <div className="ludo-base base-ruby"><strong>RUBY</strong><div>{tokens[0].map((step, index) => step < 0 && <span key={index} style={{ '--player': COLORS[0].hex }} />)}</div></div>
-        <div className="ludo-base base-azure"><strong>AZURE</strong><div>{tokens[1].map((step, index) => step < 0 && <span key={index} style={{ '--player': COLORS[1].hex }} />)}</div></div>
-        <div className="ludo-base base-amber"><strong>AMBER</strong><div>{tokens[2].map((step, index) => step < 0 && <span key={index} style={{ '--player': COLORS[2].hex }} />)}</div></div>
-        <div className="ludo-base base-jade"><strong>JADE</strong><div>{tokens[3].map((step, index) => step < 0 && <span key={index} style={{ '--player': COLORS[3].hex }} />)}</div></div>
-        {TRACK.map(([row, column], index) => <span key={`track-${index}`} className={`ludo-track-tile ${index % 13 === 0 ? 'safe' : ''}`} style={{ '--grid-row': row + 1, '--grid-col': column + 1 }}></span>)}
+        {[0, 1, 2, 3].map((player) => <div key={`base-${player}`} className={`ludo-base ${['base-ruby', 'base-azure', 'base-amber', 'base-jade'][player]}`}><strong>{COLORS[player].name.toUpperCase()}</strong><div>{tokens[player].map((step, index) => step < 0 && <button type="button" key={index} className={`ludo-yard-token ${player === turn && canMove(step) ? 'movable' : ''}`} style={{ '--player': COLORS[player].hex }} onClick={() => player === turn && moveToken(index)} disabled={player !== turn || !canMove(step) || finished} aria-label={`${players[player]?.name || COLORS[player].name} token ${index + 1}, in yard`}><span>{index + 1}</span></button>)}</div></div>)}
+        {TRACK.map(([row, column], index) => { const starter = COLORS.find((color) => color.start === index); return <span key={`track-${index}`} className={`ludo-track-tile ${SAFE_TRACK_POSITIONS.has(index) ? 'safe' : ''} ${starter ? 'start' : ''}`} style={{ '--grid-row': row + 1, '--grid-col': column + 1, '--start-tint': starter?.hex || '#dce8f5' }}>{SAFE_TRACK_POSITIONS.has(index) ? <i aria-hidden="true">✦</i> : null}</span>; })}
+        {HOME_STRETCHES.flatMap((lane, player) => lane.map(([row, column], index) => <span key={`home-${player}-${index}`} className={`ludo-home-tile ${index === lane.length - 1 ? 'home-finish' : ''}`} style={{ '--grid-row': row + 1, '--grid-col': column + 1, '--player': COLORS[player].hex }}>{index === lane.length - 1 ? '◆' : null}</span>))}
         <div className="ludo-center"><i className="ph-fill ph-crown"></i><span>HOME</span></div>
-        {tokens.slice(0, playerCount).flatMap((pieces, player) => pieces.map((step, token) => {
+        {tokens.slice(0, activePlayerCount).flatMap((pieces, player) => pieces.map((step, token) => {
           if (step < 0 || step === 56) return null;
           const [row, column] = locationFor(player, step, token);
-          return <button type="button" key={`${player}-${token}`} aria-label={`${players[player].name} token ${token + 1}`} className={`ludo-token ${player === turn && canMove(step) ? 'movable' : ''}`} onClick={() => player === turn && moveToken(token)} style={{ '--grid-row': row + 1, '--grid-col': column + 1, '--player': players[player].hex }} disabled={player !== turn || !canMove(step) || finished}><span>{token + 1}</span></button>;
+          return <button type="button" key={`${player}-${token}`} aria-label={`${players[player].name} token ${token + 1}`} className={`ludo-token ${player === turn && canMove(step) ? 'movable' : ''}`} onClick={() => player === turn && moveToken(token)} style={{ '--grid-row': row + 1, '--grid-col': column + 1, '--token-left': `${((column + 0.5) / 16) * 100}%`, '--token-top': `${((row + 0.5) / 16) * 100}%`, '--player': players[player].hex }} disabled={player !== turn || !canMove(step) || finished}><span>{token + 1}</span></button>;
         }))}
       </div></div>
-      <div className="board-game-controls"><div className="board-game-notice" aria-live="polite">{notice}</div><button type="button" className={`board-dice ${rolling ? 'rolling' : ''}`} onClick={rollDie} disabled={finished || rolling || die !== null}><span>{rolling ? '🎲' : die ?? '🎲'}</span><small>{die === null ? 'ROLL DICE' : 'SELECT A TOKEN'}</small></button></div>
+      <div className="board-game-controls"><div className="board-game-notice" aria-live="polite">{notice}</div><button type="button" className={`board-dice ${rolling ? 'rolling' : ''}`} onClick={rollDie} disabled={finished || rolling || die !== null || (mode === 'robot' && turn !== 0)}><span>{rolling ? '🎲' : die ?? '🎲'}</span><small>{die === null ? 'ROLL DICE' : 'SELECT A TOKEN'}</small></button></div>
       <div className="board-player-strip">{players.map((player, index) => <div key={player.name} className={turn === index ? 'active' : ''} style={{ '--player': player.hex }}><span></span><strong>{player.name}</strong><small>{tokens[index].filter((step) => step === 56).length}/4 home</small></div>)}</div>
     </section>
   </BoardShell>;

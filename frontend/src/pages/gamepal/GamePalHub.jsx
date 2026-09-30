@@ -5,6 +5,8 @@ import CognitiveMiniGame from './CognitiveMiniGame';
 import ReferenceMiniGame from './ReferenceMiniGames';
 import SpecialMiniGame from './SpecialMiniGames';
 import BoardMiniGame from './BoardMiniGames';
+import ArcadeMiniGame from './ArcadeMiniGames';
+import CanvasSpecialMiniGame from './CanvasSpecialGames';
 import GameArtwork from './GameArtwork';
 import DriveImage from '../../components/ui/DriveImage';
 import ModalPortal from '../../components/ui/ModalPortal';
@@ -23,7 +25,7 @@ const GAMES = [
   { id: 'queens', name: 'Queens', category: 'Problem Solving', icon: 'ph-crown', tint: '#fbbf24', summary: 'Place one queen in each row, column, and colored region.' },
   { id: 'tango', name: 'Tango', category: 'Problem Solving', icon: 'ph-sun', tint: '#a78bfa', summary: 'Balance suns and moons while following the grid rules.' },
   { id: 'zip', name: 'Zip', category: 'Problem Solving', icon: 'ph-path', tint: '#38bdf8', summary: 'Connect the numbered route through every tile exactly once.' },
-  { id: 'mini-sudoku', name: 'Mini Sudoku', category: 'Math', icon: 'ph-grid-four', tint: '#34d399', summary: 'Complete a compact 6 × 6 number puzzle.' },
+  { id: 'mini-sudoku', name: 'Mini Sudoku', category: 'Math', icon: 'ph-grid-four', tint: '#34d399', summary: 'Complete a compact 4 × 4 number puzzle.' },
   { id: 'patches', name: 'Patches', category: 'Problem Solving', icon: 'ph-shapes', tint: '#fb923c', summary: 'Rotate and arrange tile patches to cover the whole board.' },
   { id: 'wend', name: 'Wend', category: 'Language', icon: 'ph-text-aa', tint: '#60a5fa', summary: 'Trace connected words and use every letter tile once.' },
   { id: 'knifeshow', name: 'Knife Show', category: 'Speed', icon: 'ph-target', tint: '#fb7185', summary: 'Time your throws around a spinning target and avoid collisions.' },
@@ -33,11 +35,20 @@ const GAMES = [
   { id: 'word-association', name: 'Word Association', category: 'Language', icon: 'ph-circles-three-plus', tint: '#fbbf24', summary: 'Group changing word tiles by the hidden theme they share.' },
   { id: 'ludo-king', name: 'Ludo King', category: 'Problem Solving', icon: 'ph-dice-five', tint: '#fb7185', summary: 'Race your tokens home, use safe squares, and send rivals back to start.' },
   { id: 'snakes-ladders', name: 'Snakes & Ladders', category: 'Problem Solving', icon: 'ph-stairs', tint: '#34d399', summary: 'Climb ladders, avoid snakes, and be first to reach square 100.' },
+  { id: '2048', name: '2048', category: 'Math', icon: 'ph-squares-four', tint: '#fbbf24', summary: 'Slide matching number tiles together and build the 2048 tile.' },
+  { id: 'minesweeper', name: 'Minesweeper', category: 'Attention', icon: 'ph-warning-diamond', tint: '#38bdf8', summary: 'Read the clues, mark the hidden mines, and clear the safe field.' },
+  { id: 'connect-4', name: 'Connect 4', category: 'Problem Solving', icon: 'ph-circles-three', tint: '#fb7185', summary: 'Drop discs into a column and connect four in a row.' },
+  { id: 'wordle', name: 'Wordle', category: 'Language', icon: 'ph-text-aa', tint: '#34d399', summary: 'Find the five-letter word in six guesses using color clues.' },
+  { id: 'snake', name: 'Snake', category: 'Speed', icon: 'ph-waveform', tint: '#a78bfa', summary: 'Collect energy orbs, grow longer, and avoid your own trail.' },
+  { id: 'flappy-bird', name: 'Flappy Bird', category: 'Speed', icon: 'ph-bird', tint: '#38bdf8', summary: 'Tap to fly through the pipe gaps and set a new distance record.' },
+  { id: 'brick-breaker', name: 'Brick Breaker', category: 'Speed', icon: 'ph-square', tint: '#fb923c', summary: 'Bounce the ball off your paddle and clear the neon brick wall.' },
 ];
 
 const REFERENCE_GAME_IDS = new Set(['pinpoint', 'crossclimb', 'queens', 'tango', 'zip', 'mini-sudoku', 'patches', 'wend']);
 const SPECIAL_GAME_IDS = new Set(['knifeshow', 'snowrider', 'dino', 'chess', 'word-association']);
+const CANVAS_SPECIAL_GAME_IDS = new Set(['knifeshow', 'snowrider', 'dino']);
 const BOARD_GAME_IDS = new Set(['ludo-king', 'snakes-ladders']);
+const ARCADE_GAME_IDS = new Set(['2048', 'minesweeper', 'connect-4', 'wordle', 'snake', 'flappy-bird', 'brick-breaker']);
 const GAME_RULES = {
   memory: { goal: 'Remember the symbol sequence, then select the matching pattern.', controls: 'Watch the sequence until it hides, then tap the matching answer.', scoring: 'Correct answers and quicker responses earn more points. Difficulty adapts each round.' },
   attention: { goal: 'Choose the color of the letters, ignoring the word itself.', controls: 'Tap the answer that matches the ink color.', scoring: 'Ten quick rounds; accuracy and response time shape your score.' },
@@ -51,16 +62,23 @@ const GAME_RULES = {
   queens: { goal: 'Place one queen in every row, column, and colored region.', controls: 'Tap a square to place or remove a queen.', scoring: 'Solve the board without conflicts.' },
   tango: { goal: 'Balance suns and moons while following the grid clues.', controls: 'Tap cells to switch between the two symbols.', scoring: 'Fill the board while satisfying each row, column, and clue.' },
   zip: { goal: 'Connect the numbered route and pass through every tile once.', controls: 'Tap neighboring cells to extend the path.', scoring: 'Finish a complete, non-repeating route.' },
-  'mini-sudoku': { goal: 'Complete the compact number grid without repeating a number in a row or column.', controls: 'Tap a cell, then choose a number.', scoring: 'Fill every empty cell correctly.' },
+  'mini-sudoku': { goal: 'Complete the 4 × 4 grid without repeating 1–4 in any row, column, or 2 × 2 box.', controls: 'Tap an empty cell, then choose a number from the pad.', scoring: 'Fill every empty cell correctly.' },
   patches: { goal: 'Rotate and arrange the pieces so they cover the board.', controls: 'Select a patch, rotate it, and place it on the grid.', scoring: 'Cover the target area with no gaps or overlap.' },
   wend: { goal: 'Trace connected letters to find the words in the puzzle.', controls: 'Drag or tap neighboring letter tiles to build a word.', scoring: 'Find every listed word using connected letters.' },
-  knifeshow: { goal: 'Land ten knives on the spinning target without hitting a blade already stuck there.', controls: 'Tap Throw knife when the lower edge of the target is clear. You have three collisions.', scoring: 'Clean hits add points; the target speeds up as your run continues.' },
-  snowrider: { goal: 'Ride the full 40-second descent, dodge hazards, and collect gifts.', controls: 'Use Left/Right or A/D to change lanes. Press Space/Up to jump; touch buttons work on mobile.', scoring: 'Distance and gifts add to your separate Snow Rider score.' },
+  knifeshow: { goal: 'Land twelve knives on the spinning target without hitting a blade already stuck there.', controls: 'Tap Throw blade when the lower edge of the target is clear. You have three collisions.', scoring: 'Clean hits add points; the target speeds up and changes direction as your run continues.' },
+  snowrider: { goal: 'Ride the full 45-second descent, dodge hazards, and collect gifts.', controls: 'Use Left/Right or A/D to change lanes. Press Space/Up to jump; touch buttons work on mobile.', scoring: 'Distance and gifts add to your separate Snow Rider score.' },
   dino: { goal: 'Keep running for as long as possible without hitting an obstacle.', controls: 'Press Space/Up to jump over cacti. Hold Down to duck under flyers; touch buttons work on mobile.', scoring: 'Your distance score increases with survival time while the run speeds up.' },
   chess: { goal: 'Play a full game as White and try to checkmate the computer.', controls: 'Tap a white piece to see legal moves, then tap a highlighted square. Use Resign to end early.', scoring: 'Checkmate earns the highest score; a draw or loss receives its own Chess result.' },
   'word-association': { goal: 'Sort sixteen words into four groups of four that share a hidden theme.', controls: 'Select four tiles, then tap Check group. The board changes each time.', scoring: 'Correct groups add points; fewer incorrect guesses improve accuracy.' },
-  'ludo-king': { goal: 'Bring all four of your tokens from the yard to the home triangle before the other players.', controls: 'Roll a six to bring a token out. Select a token that can move the number rolled; land on an opponent to send it home. Exact rolls are needed to finish.', scoring: 'Your points reflect how far your tokens travel and whether you finish first.' },
+  'ludo-king': { goal: 'Bring all four of your tokens from the yard to the home triangle before the other players.', controls: 'Choose Play with robot to face three CPU players, or Play with friends for local pass-and-play. Roll a six to bring a token out, select a highlighted token to move, and reach home with an exact roll.', scoring: 'Your points reflect how far your tokens travel and whether you finish first.' },
   'snakes-ladders': { goal: 'Be the first player to land exactly on square 100.', controls: 'Roll the die and move along the numbered path. A ladder takes you up; a snake slides you down. An overshoot keeps you in place.', scoring: 'The winner earns the top score; other players receive a score based on finishing distance.' },
+  '2048': { goal: 'Combine matching tiles until you build the 2048 tile.', controls: 'Use arrow keys or the on-screen pad to slide the whole board. Equal tiles merge once per move.', scoring: 'Your score rises with each merge; reaching 2048 completes the run.' },
+  minesweeper: { goal: 'Reveal every safe tile without opening a mine.', controls: 'Tap to open a tile. Right-click or long-press to flag a suspected mine. The first open tile is safe.', scoring: 'Clearing the field earns full credit; revealed safe tiles count toward a partial result.' },
+  'connect-4': { goal: 'Connect four discs in a row horizontally, vertically, or diagonally.', controls: 'Choose a column to drop a disc. Use the mode toggle for a computer match or two-player pass-and-play.', scoring: 'A win earns full match points; the score also reflects how much of the board was played.' },
+  wordle: { goal: 'Find the hidden five-letter word in six tries.', controls: 'Type letters and press Enter. Green is the right letter and place; amber is in the word elsewhere; gray is absent.', scoring: 'Solving in fewer guesses earns more points.' },
+  snake: { goal: 'Collect as many energy orbs as possible without hitting a wall or your trail.', controls: 'Use arrow keys or WASD; mobile players can use the direction pad.', scoring: 'Each orb increases your score. Your personal best is saved on this device.' },
+  'flappy-bird': { goal: 'Fly through as many pipe gaps as possible.', controls: 'Tap, click, or press Space/Up to flap. Each gap adds one point.', scoring: 'Your score is the number of pipes cleared; your best run is saved on this device.' },
+  'brick-breaker': { goal: 'Clear every brick while keeping the ball in play.', controls: 'Move the paddle with your mouse, touch, or Left/Right keys. Paddle-edge hits steer the ball.', scoring: 'Bricks add points. Clear the wall for a perfect result; you have three lives.' },
 };
 
 const indiaDateKey = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
@@ -93,6 +111,9 @@ export default function GamePalHub() {
   const [lastGameResult, setLastGameResult] = useState(null);
   const completionHandled = useRef(false);
   const handledRoomStarts = useRef(new Set());
+  const completionTransitionRef = useRef(null);
+
+  useEffect(() => () => window.clearTimeout(completionTransitionRef.current), []);
 
   const firstName = cleanName(user?.name);
   const preferenceKey = `talenzo_gamepal_goals_${user?.email || 'student'}`;
@@ -107,6 +128,8 @@ export default function GamePalHub() {
 
   const startGameAfterRules = () => {
     if (!pendingGame) return;
+    window.clearTimeout(completionTransitionRef.current);
+    completionTransitionRef.current = null;
     setActiveChallenge(pendingGame.challenge);
     setActiveRoom(pendingGame.room);
     setActiveGame(pendingGame.game);
@@ -375,7 +398,11 @@ export default function GamePalHub() {
     const currentBest = Number(stats?.games?.[gameName]?.bestScore) || 0;
     const resultId = `${gameName}-${Date.now()}`;
     setLastGameResult({ id: resultId, gameName, category, score: Number(score) || 0, accuracy: Number(accuracy) || 0, timeSeconds: Number(timeSeconds) || 0, highScore: Math.max(currentBest, Number(score) || 0), isNewRecord: Number(score) > currentBest, saving: true, syncNote: '', standings: [] });
-    setActiveGame(null);
+    window.clearTimeout(completionTransitionRef.current);
+    completionTransitionRef.current = window.setTimeout(() => {
+      completionTransitionRef.current = null;
+      setActiveGame((current) => current?.name === gameName ? null : current);
+    }, 1600);
     const submittedChallenge = activeChallenge;
     const submittedRoom = activeRoom;
     setActiveChallenge(null);
@@ -442,9 +469,9 @@ export default function GamePalHub() {
   };
 
   if (activeGame) {
-    const Game = BOARD_GAME_IDS.has(activeGame.id) ? BoardMiniGame : SPECIAL_GAME_IDS.has(activeGame.id) ? SpecialMiniGame : REFERENCE_GAME_IDS.has(activeGame.id) ? ReferenceMiniGame : CognitiveMiniGame;
+    const Game = BOARD_GAME_IDS.has(activeGame.id) ? BoardMiniGame : ARCADE_GAME_IDS.has(activeGame.id) ? ArcadeMiniGame : CANVAS_SPECIAL_GAME_IDS.has(activeGame.id) ? CanvasSpecialMiniGame : SPECIAL_GAME_IDS.has(activeGame.id) ? SpecialMiniGame : REFERENCE_GAME_IDS.has(activeGame.id) ? ReferenceMiniGame : CognitiveMiniGame;
     const initialLevel = Math.min(5, Math.max(1, Number(stats.games?.[activeGame.name]?.level) || 1));
-    return <Game game={activeGame} initialLevel={initialLevel} onComplete={handleGameComplete} onExit={() => { completionHandled.current = false; setActiveChallenge(null); setActiveRoom(null); setActiveGame(null); }} />;
+    return <Game game={activeGame} initialLevel={initialLevel} onComplete={handleGameComplete} onExit={() => { window.clearTimeout(completionTransitionRef.current); completionTransitionRef.current = null; completionHandled.current = false; setActiveChallenge(null); setActiveRoom(null); setActiveGame(null); }} />;
   }
 
   if (loading) return <div className="gamepal-loading"><i className="ph ph-spinner animate-spin"></i><span>Preparing your daily workout…</span></div>;

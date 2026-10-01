@@ -2,25 +2,42 @@ import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 
+const downloadSeenKey = (type) => `talenzo_app_download_seen_${type}`;
+const previousDownloadIds = { apk: '1D8vnuerOECQyZuvpjhYSeVG7A4B7ZTKV', exe: '1Xmf6gAeXxaoTmxEjpmrUnYlGHy7dMXM3' };
+
 export default function Settings() {
   const { theme, toggleTheme, accent, setAccent, canInstallApp, installApp, isAppInstalled, isIOS } = useOutletContext();
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [showPasswords, setShowPasswords] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState(null);
   const [savingPassword, setSavingPassword] = useState(false);
-  const [appDownloads, setAppDownloads] = useState({ loading: true, error: '', files: { apk: null, exe: null } });
+  const [appDownloads, setAppDownloads] = useState({ loading: true, error: '', files: { apk: null, exe: null }, newVersions: { apk: false, exe: false } });
 
   useEffect(() => {
     let cancelled = false;
-    api.get('/api/dashboard/app-downloads')
+    const loadDownloads = () => api.get('/api/dashboard/app-downloads')
       .then((response) => {
-        if (!cancelled && response.data?.success) setAppDownloads({ loading: false, error: '', files: response.data.downloads || { apk: null, exe: null } });
-        else if (!cancelled) setAppDownloads({ loading: false, error: response.data?.message || 'App downloads could not be loaded.', files: { apk: null, exe: null } });
+        if (!cancelled && response.data?.success) {
+          const files = response.data.downloads || { apk: null, exe: null };
+          const newVersions = { apk: false, exe: false };
+          for (const type of ['apk', 'exe']) {
+            const file = files[type];
+            if (!file?.versionKey) continue;
+            try {
+              const seen = localStorage.getItem(downloadSeenKey(type));
+              newVersions[type] = seen ? seen !== file.versionKey : file.id !== previousDownloadIds[type] || Number(file.driveVersion || 1) > 1;
+              if (!seen && !newVersions[type]) localStorage.setItem(downloadSeenKey(type), file.versionKey);
+            } catch { /* The download remains available if browser storage is disabled. */ }
+          }
+          setAppDownloads({ loading: false, error: '', files, newVersions });
+        } else if (!cancelled) setAppDownloads({ loading: false, error: response.data?.message || 'App downloads could not be loaded.', files: { apk: null, exe: null }, newVersions: { apk: false, exe: false } });
       })
       .catch((error) => {
-        if (!cancelled) setAppDownloads({ loading: false, error: error.response?.data?.message || 'App downloads could not be loaded from Google Drive.', files: { apk: null, exe: null } });
+        if (!cancelled) setAppDownloads({ loading: false, error: error.response?.data?.message || 'App downloads could not be loaded from Google Drive.', files: { apk: null, exe: null }, newVersions: { apk: false, exe: false } });
       });
-    return () => { cancelled = true; };
+    loadDownloads();
+    const refreshTimer = window.setInterval(loadDownloads, 60_000);
+    return () => { cancelled = true; window.clearInterval(refreshTimer); };
   }, []);
 
   const updatePassword = async (event) => {
@@ -141,9 +158,12 @@ export default function Settings() {
             ].map(({ type, label, icon, color }) => {
               const file = appDownloads.files[type];
               return file ? (
-                <a key={type} href={file.url} target="_blank" rel="noopener noreferrer" className="btn-action" title={`Latest file: ${file.name}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}>
+                <a key={type} href={file.url} target="_blank" rel="noopener noreferrer" className="btn-action" onClick={() => {
+                  try { if (file.versionKey) localStorage.setItem(downloadSeenKey(type), file.versionKey); } catch { /* The download still opens if browser storage is disabled. */ }
+                  setAppDownloads((current) => ({ ...current, newVersions: { ...current.newVersions, [type]: false } }));
+                }} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}>
                   <i className={`ph ${icon}`} style={{ color, fontSize: '1.2rem' }}></i>
-                  <span>{label}<small style={{ display: 'block', color: 'var(--text-muted)', fontSize: '.7rem', marginTop: '3px', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}{file.modifiedTime ? ` · updated ${new Date(file.modifiedTime).toLocaleDateString('en-IN')}` : ''}</small></span>
+                  <span>{label}<small style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'var(--text-muted)', fontSize: '.7rem', marginTop: '3px' }}>{file.versionLabel || 'Latest version'}{appDownloads.newVersions[type] && <strong style={{ color: '#34d399', fontSize: '.66rem' }}>New version available</strong>}</small></span>
                 </a>
               ) : (
                 <button key={type} type="button" className="btn-action" disabled style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151', opacity: .72 }}>
@@ -153,8 +173,7 @@ export default function Settings() {
               );
             })}
           </div>
-          <p className="portal-note" role="status">{appDownloads.loading ? 'Looking for the latest installers in the shared Applications folder…' : appDownloads.error ? `${appDownloads.error} Check that the folder is shared with the portal’s Google service account.` : 'The newest APK and EXE in the shared Applications folder are shown here automatically.'}</p>
-          <a href="https://drive.google.com/drive/folders/12xh3OO3wZ1TDZcIg6kbmo1kmJKugi4yV?usp=sharing" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginBottom: '20px', fontSize: '.8rem' }}>Open app downloads folder</a>
+          {appDownloads.error && <p className="portal-note" role="status">{appDownloads.error} Check that the folder is shared with the portal’s Google service account.</p>}
 
           <hr style={{ borderColor: 'rgba(255,255,255,0.1)', margin: '0 0 20px 0' }} />
 

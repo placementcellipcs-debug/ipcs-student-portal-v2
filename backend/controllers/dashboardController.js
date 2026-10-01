@@ -273,7 +273,7 @@ const getAppDownloads = async (req, res) => {
             q: `'${folderId.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' in parents and trashed = false`,
             pageSize: 100,
             orderBy: 'modifiedTime desc',
-            fields: 'files(id,name,mimeType,modifiedTime,size,webViewLink,webContentLink)',
+            fields: 'files(id,name,mimeType,modifiedTime,size,version,md5Checksum,webViewLink,webContentLink)',
             supportsAllDrives: true,
             includeItemsFromAllDrives: true,
         }));
@@ -284,9 +284,13 @@ const getAppDownloads = async (req, res) => {
             const extension = name.toLowerCase().match(/\.(apk|exe)$/)?.[1];
             if (!extension || latestByType[extension]) continue;
             const link = file.webContentLink || `https://drive.google.com/uc?export=download&id=${encodeURIComponent(file.id)}`;
+            const releaseVersion = name.match(/(?:^|[^0-9])v?(\d+\.\d+(?:\.\d+){0,2}(?:[-+][0-9a-z.-]+)?)(?=[^0-9]|$)/i)?.[1];
             latestByType[extension] = {
                 id: file.id,
                 name,
+                driveVersion: file.version || '1',
+                versionLabel: `Version ${releaseVersion || file.version || '1'}`,
+                versionKey: [file.id, file.version || '', file.md5Checksum || '', file.modifiedTime || ''].join(':'),
                 modifiedTime: file.modifiedTime || null,
                 size: Number(file.size) || null,
                 url: link,

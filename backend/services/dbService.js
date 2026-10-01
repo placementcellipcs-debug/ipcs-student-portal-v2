@@ -58,7 +58,7 @@ class DatabaseService {
 
     static async appendRowRaw(range, rowData, targetSpreadsheetId = process.env.SPREADSHEET_ID) {
         const { googleSheets, auth } = await connectSheet();
-        await this.withRetry(() => googleSheets.spreadsheets.values.append({
+        const response = await this.withRetry(() => googleSheets.spreadsheets.values.append({
             auth,
             spreadsheetId: targetSpreadsheetId,
             range,
@@ -66,7 +66,7 @@ class DatabaseService {
             resource: { values: [rowData] },
         }));
         dbCache.flushAll();
-        return true;
+        return response.data.updates?.updatedRange || true;
     }
 
     static async ensureWorksheetWithHeaders(title, headers, targetSpreadsheetId = process.env.SPREADSHEET_ID) {

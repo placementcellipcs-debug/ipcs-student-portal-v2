@@ -107,7 +107,7 @@ export default function Login() {
       return;
     }
     setIsRequestingReset(true);
-    setResetStatus({ type: 'info', message: 'Checking your student account…' });
+    setResetStatus({ type: 'info', message: 'Checking the student register and preparing your secure email…' });
     try {
       const response = await api.post('/api/auth/forgot-password', { email: cleanEmail });
       setResetStatus({ type: 'success', message: response.data?.message || 'A reset link has been sent to your email. It expires in 5 minutes.' });
@@ -268,7 +268,7 @@ export default function Login() {
                     <div className="form-group"><label htmlFor="reset-email">Student email ID</label><input id="reset-email" type="email" autoComplete="email" placeholder="student@ipcsglobal.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
                     <button type="submit" className="btn-action login-submit-button" disabled={isRequestingReset} style={{ width: '100%', marginTop: '0.8rem', padding: '1rem', borderRadius: '10px' }}>
                       {isRequestingReset && <span className="login-status-spinner" aria-hidden="true"></span>}
-                      {isRequestingReset ? 'Checking account…' : 'Email reset link'}
+                      {isRequestingReset ? 'Sending secure link…' : 'Email reset link'}
                     </button>
                     {resetStatus && <div className={`login-auth-status ${resetStatus.type}`} role={resetStatus.type === 'error' ? 'alert' : 'status'} aria-live="polite">
                       <i className={`ph ${resetStatus.type === 'error' ? 'ph-warning-circle' : resetStatus.type === 'success' ? 'ph-check-circle' : 'ph-shield-check'}`} aria-hidden="true"></i>

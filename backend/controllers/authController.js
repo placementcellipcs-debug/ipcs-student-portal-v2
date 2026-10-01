@@ -3,7 +3,9 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const axios = require('axios');
 const crypto = require('crypto');
+const fs = require('fs');
 const nodemailer = require('nodemailer');
+const path = require('path');
 const AuthSessionService = require('../services/authSessionService');
 
 const RESET_TOKEN_TTL_MS = 5 * 60 * 1000;
@@ -38,6 +40,32 @@ const findStudentByEmail = (rows, email) => {
     return null;
 };
 
+const buildResetEmail = ({ name, resetLink, includeLogo }) => {
+    const safeName = escapeHtml(name || 'Student');
+    const logo = includeLogo
+        ? '<img src="cid:ipcs-global-logo" width="138" alt="IPCS Global" style="display:block;width:138px;max-width:100%;height:auto;border:0;margin:0 auto 22px">'
+        : '<div style="font-size:17px;letter-spacing:5px;font-weight:800;color:#f3f7ff;text-align:center;margin:0 0 22px">IPCS <span style="color:#35bdf2">GLOBAL</span></div>';
+
+    return {
+        subject: 'Your secure Talenzo password reset link',
+        text: `Hello ${name || 'Student'},\n\nWe received a request to reset your IPCS Global student portal password. Use this one-time link within 5 minutes:\n${resetLink}\n\nFor your security, the link works once and resetting your password signs out other active sessions. If you did not request this, ignore this email; your password will not change.`,
+        html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="dark"></head><body style="margin:0;padding:32px 12px;background:#07111f;font-family:Arial,Helvetica,sans-serif;color:#f3f7ff">
+          <div style="display:none;max-height:0;overflow:hidden;opacity:0">Your one-time IPCS Global password reset link expires in 5 minutes.</div>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="center">
+            <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background:#101b2b;border:1px solid #26384d;border-radius:20px;overflow:hidden">
+              <tr><td style="padding:30px 38px 8px;text-align:center">${logo}<div style="display:inline-block;padding:7px 12px;border:1px solid #16445a;border-radius:99px;background:#102638;color:#54cafa;font-size:10px;font-weight:bold;letter-spacing:1.5px">STUDENT PORTAL SECURITY</div></td></tr>
+              <tr><td style="padding:18px 38px 0"><div style="height:2px;background:#1e3247;font-size:0;line-height:0"><div style="width:34%;height:2px;background:#28b8ed;font-size:0;line-height:0">&nbsp;</div></div></td></tr>
+              <tr><td style="padding:30px 38px 0"><div style="font-size:12px;font-weight:bold;letter-spacing:1.4px;color:#3ac5f4;text-transform:uppercase">Account recovery</div><h1 style="margin:10px 0 12px;font-size:28px;line-height:1.2;color:#f6f9ff">Reset your password</h1><p style="margin:0;color:#b2c0d2;font-size:15px;line-height:1.7">Hello ${safeName}, we received a request to reset the password for your IPCS Global student account.</p></td></tr>
+              <tr><td style="padding:24px 38px 0"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#0b1523;border:1px solid #26384d;border-radius:14px"><tr><td style="padding:18px 20px"><div style="font-size:13px;line-height:1.65;color:#c0ccda">Use this secure, one-time link to choose a new password. It expires in <strong style="color:#f3f7ff">5 minutes</strong>.</div><div style="margin-top:18px"><a href="${resetLink}" style="display:inline-block;padding:14px 22px;border-radius:10px;background:#079b73;color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px">Reset my password&nbsp; &#8594;</a></div><div style="margin-top:14px;color:#8293a8;font-size:11px;line-height:1.5">For your protection, this link can only be used once.</div></td></tr></table></td></tr>
+              <tr><td style="padding:22px 38px 0"><p style="margin:0 0 8px;color:#8293a8;font-size:12px;line-height:1.6">If the button does not open, copy this link into your browser:</p><p style="margin:0;padding:12px;background:#0b1523;border:1px solid #26384d;border-radius:9px;color:#55c9f5;font-size:11px;line-height:1.6;word-break:break-all"><a href="${resetLink}" style="color:#55c9f5;text-decoration:none">${resetLink}</a></p></td></tr>
+              <tr><td style="padding:20px 38px 0"><p style="margin:0;color:#9cabc0;font-size:12px;line-height:1.7"><strong style="color:#d9e2ef">Wasn’t you?</strong> Ignore this email. Your password will stay unchanged. After a successful reset, active sessions on your other devices will be signed out.</p></td></tr>
+              <tr><td style="padding:28px 38px 30px"><div style="height:1px;background:#26384d;font-size:0;line-height:0">&nbsp;</div><p style="margin:16px 0 0;color:#74869c;font-size:11px;line-height:1.6;text-align:center">IPCS Global · Talenzo Student Portal<br>This is an automated account security email.</p></td></tr>
+            </table>
+          </td></tr></table>
+        </body></html>`,
+    };
+};
+
 const requestPasswordReset = async (req, res) => {
     try {
         const email = String(req.body?.email || '').trim().toLowerCase();
@@ -48,45 +76,65 @@ const requestPasswordReset = async (req, res) => {
         const studentRows = await DatabaseService.getSheetData('Data!B:D', process.env.SPREADSHEET_ID, 0);
         const student = findStudentByEmail(studentRows, email);
         if (!student) return res.status(404).json({ success: false, code: 'ACCOUNT_NOT_FOUND', message: 'Student account not found. Check the email address registered with IPCS Global.' });
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        const mailUser = String(process.env.EMAIL_USER || '').trim();
+        const mailPassword = String(process.env.EMAIL_PASS || '').replace(/\s/g, '');
+        if (!mailUser || !mailPassword) {
             return res.status(503).json({ success: false, message: 'Password reset email is not configured. Please contact your portal administrator.' });
         }
 
-        await Promise.all([ensureResetSheet(), AuthSessionService.ensureSessionRecord(email)]);
+        // Session tracking is only required when the password actually changes.
+        // Avoid its extra Sheets reads/appends during the account lookup request.
+        await ensureResetSheet();
         const token = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
         const createdAt = new Date();
         const expiresAt = new Date(createdAt.getTime() + RESET_TOKEN_TTL_MS);
-        await DatabaseService.appendRowRaw(`${RESET_SHEET}!A:E`, [tokenHash, email, expiresAt.toISOString(), 'PENDING', createdAt.toISOString()]);
+        const tokenAppendRange = await DatabaseService.appendRowRaw(`${RESET_SHEET}!A:E`, [tokenHash, email, expiresAt.toISOString(), 'PENDING', createdAt.toISOString()]);
+        const tokenRowNumber = Number(String(tokenAppendRange).match(/!A(\d+):E\d+$/)?.[1]);
 
         const baseUrl = String(process.env.RESET_PASSWORD_BASE_URL || process.env.FRONTEND_URL || 'https://placement.ipcsglobal.info')
             .split(',')[0].trim().replace(/\/+$/, '');
         const resetLink = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
-        const safeName = escapeHtml(student.name || 'Student');
+        const logoPath = path.resolve(__dirname, '../../frontend/src/assets/ipcs-global-logo.png');
+        const includeLogo = fs.existsSync(logoPath);
+        const emailContent = buildResetEmail({ name: student.name, resetLink, includeLogo });
         const transporter = nodemailer.createTransport({
             service: 'gmail',
-            auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+            auth: { user: mailUser, pass: mailPassword },
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 20000,
         });
 
         try {
             await transporter.sendMail({
-                from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+                from: process.env.EMAIL_FROM || mailUser,
                 to: student.email,
-                subject: 'Reset your Talenzo student portal password',
-                text: `Hello ${student.name || 'Student'},\n\nUse this secure link to reset your Talenzo password. It expires in 5 minutes:\n${resetLink}\n\nIf you did not request this, you can ignore this email.`,
-                html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#172033"><h2>Reset your Talenzo password</h2><p>Hello ${safeName},</p><p>Use the button below to choose a new password. This one-time link expires in <strong>5 minutes</strong>.</p><p><a href="${resetLink}" style="display:inline-block;padding:12px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold">Reset password</a></p><p>If the button does not work, copy this link into your browser:</p><p style="word-break:break-all">${resetLink}</p><p>If you did not request this, you can ignore this email.</p></div>`,
+                subject: emailContent.subject,
+                text: emailContent.text,
+                html: emailContent.html,
+                attachments: includeLogo ? [{ filename: 'ipcs-global-logo.png', path: logoPath, cid: 'ipcs-global-logo' }] : [],
             });
         } catch (mailError) {
-            console.error('Password reset email failed:', mailError.message);
-            const rows = await DatabaseService.getSheetData(`${RESET_SHEET}!A:E`, process.env.SPREADSHEET_ID, 0);
-            const insertedIndex = rows.findIndex((row) => String(row[0] || '') === tokenHash);
-            if (insertedIndex > 0) await DatabaseService.updateRow(`${RESET_SHEET}!D${insertedIndex + 1}`, ['FAILED']);
+            console.error('Password reset email failed:', {
+                code: mailError.code,
+                command: mailError.command,
+                responseCode: mailError.responseCode,
+                message: mailError.message,
+            });
+            try {
+                if (Number.isInteger(tokenRowNumber) && tokenRowNumber > 1) {
+                    await DatabaseService.updateRow(`${RESET_SHEET}!D${tokenRowNumber}`, ['FAILED']);
+                }
+            } catch (statusError) {
+                console.error('Could not mark failed password reset email:', statusError.message);
+            }
             return res.status(503).json({ success: false, message: 'The reset email could not be sent right now. Please try again later.' });
         }
 
         return res.status(200).json({ success: true, message: 'A password reset link has been sent to your registered email. It expires in 5 minutes.' });
     } catch (error) {
-        console.error('Password reset request failed:', error.message);
+        console.error('Password reset request failed:', { code: error.code, message: error.message });
         return res.status(503).json({ success: false, message: 'We could not start the password reset. Please try again shortly.' });
     }
 };

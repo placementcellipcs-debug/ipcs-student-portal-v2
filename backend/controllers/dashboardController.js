@@ -260,6 +260,45 @@ const getDriveAlerts = async (req, res) => {
     }
 };
 
+// Return the latest Android and Windows installers from the shared app folder.
+const getAppDownloads = async (req, res) => {
+    try {
+        const folderId = String(process.env.APP_DOWNLOADS_DRIVE_FOLDER_ID || '12xh3OO3wZ1TDZcIg6kbmo1kmJKugi4yV').trim();
+        if (!folderId) return res.status(503).json({ success: false, message: 'App downloads are not configured.' });
+
+        const { google } = require('googleapis');
+        const { auth } = await connectSheet();
+        const drive = google.drive({ version: 'v3', auth });
+        const response = await DatabaseService.withRetry(() => drive.files.list({
+            q: `'${folderId.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' in parents and trashed = false`,
+            pageSize: 100,
+            orderBy: 'modifiedTime desc',
+            fields: 'files(id,name,mimeType,modifiedTime,size,webViewLink,webContentLink)',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+        }));
+        const files = response.data.files || [];
+        const latestByType = {};
+        for (const file of files) {
+            const name = String(file.name || '').trim();
+            const extension = name.toLowerCase().match(/\.(apk|exe)$/)?.[1];
+            if (!extension || latestByType[extension]) continue;
+            const link = file.webContentLink || `https://drive.google.com/uc?export=download&id=${encodeURIComponent(file.id)}`;
+            latestByType[extension] = {
+                id: file.id,
+                name,
+                modifiedTime: file.modifiedTime || null,
+                size: Number(file.size) || null,
+                url: link,
+            };
+        }
+        return res.status(200).json({ success: true, downloads: { apk: latestByType.apk || null, exe: latestByType.exe || null } });
+    } catch (error) {
+        console.error('App download lookup failed:', error.message);
+        return res.status(503).json({ success: false, message: 'The latest app downloads could not be loaded from Google Drive.' });
+    }
+};
+
 // 2. MARK ATTENDANCE
 // 2. MARK ATTENDANCE
 const markAttendance = async (req, res) => {
@@ -615,4 +654,4 @@ const submitDriveResponse = async (req, res) => {
     }
 };
 
-module.exports = { getDashboardData, getDriveAlerts, markAttendance, applyForJob, updateProfile, uploadDocument, updatePassword, submitIssue, submitDriveResponse };
+module.exports = { getDashboardData, getDriveAlerts, getAppDownloads, markAttendance, applyForJob, updateProfile, uploadDocument, updatePassword, submitIssue, submitDriveResponse };

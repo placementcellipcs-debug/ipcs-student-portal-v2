@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 
@@ -8,6 +8,20 @@ export default function Settings() {
   const [showPasswords, setShowPasswords] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState(null);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [appDownloads, setAppDownloads] = useState({ loading: true, error: '', files: { apk: null, exe: null } });
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/api/dashboard/app-downloads')
+      .then((response) => {
+        if (!cancelled && response.data?.success) setAppDownloads({ loading: false, error: '', files: response.data.downloads || { apk: null, exe: null } });
+        else if (!cancelled) setAppDownloads({ loading: false, error: response.data?.message || 'App downloads could not be loaded.', files: { apk: null, exe: null } });
+      })
+      .catch((error) => {
+        if (!cancelled) setAppDownloads({ loading: false, error: error.response?.data?.message || 'App downloads could not be loaded from Google Drive.', files: { apk: null, exe: null } });
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const updatePassword = async (event) => {
     event.preventDefault();
@@ -120,30 +134,27 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* Native App Download Buttons */}
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
-            <a 
-              href="https://drive.google.com/file/d/1D8vnuerOECQyZuvpjhYSeVG7A4B7ZTKV/view?usp=drive_link" 
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-action" 
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}
-            >
-              <i className="ph ph-android-logo" style={{ color: '#34d399', fontSize: '1.2rem' }}></i> 
-              Download for Android (.apk)
-            </a>
-            
-            <a 
-              href="https://drive.google.com/file/d/1Xmf6gAeXxaoTmxEjpmrUnYlGHy7dMXM3/view?usp=drive_link" 
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-action" 
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}
-            >
-              <i className="ph ph-windows-logo" style={{ color: '#38bdf8', fontSize: '1.2rem' }}></i> 
-              Download for Windows (.exe)
-            </a>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }} aria-live="polite">
+            {[
+              { type: 'apk', label: 'Download for Android (.apk)', icon: 'ph-android-logo', color: '#34d399' },
+              { type: 'exe', label: 'Download for Windows (.exe)', icon: 'ph-windows-logo', color: '#38bdf8' },
+            ].map(({ type, label, icon, color }) => {
+              const file = appDownloads.files[type];
+              return file ? (
+                <a key={type} href={file.url} target="_blank" rel="noopener noreferrer" className="btn-action" title={`Latest file: ${file.name}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}>
+                  <i className={`ph ${icon}`} style={{ color, fontSize: '1.2rem' }}></i>
+                  <span>{label}<small style={{ display: 'block', color: 'var(--text-muted)', fontSize: '.7rem', marginTop: '3px', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}{file.modifiedTime ? ` · updated ${new Date(file.modifiedTime).toLocaleDateString('en-IN')}` : ''}</small></span>
+                </a>
+              ) : (
+                <button key={type} type="button" className="btn-action" disabled style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151', opacity: .72 }}>
+                  <i className={`ph ${icon}`} style={{ color, fontSize: '1.2rem' }}></i>
+                  {appDownloads.loading ? `Checking ${type.toUpperCase()}…` : `${type.toUpperCase()} not found`}
+                </button>
+              );
+            })}
           </div>
+          <p className="portal-note" role="status">{appDownloads.loading ? 'Looking for the latest installers in the shared Applications folder…' : appDownloads.error ? `${appDownloads.error} Check that the folder is shared with the portal’s Google service account.` : 'The newest APK and EXE in the shared Applications folder are shown here automatically.'}</p>
+          <a href="https://drive.google.com/drive/folders/12xh3OO3wZ1TDZcIg6kbmo1kmJKugi4yV?usp=sharing" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginBottom: '20px', fontSize: '.8rem' }}>Open app downloads folder</a>
 
           <hr style={{ borderColor: 'rgba(255,255,255,0.1)', margin: '0 0 20px 0' }} />
 

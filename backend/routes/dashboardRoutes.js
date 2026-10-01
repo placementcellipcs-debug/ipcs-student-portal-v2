@@ -8,6 +8,7 @@ const authenticateToken = require('../middleware/authMiddleware');
 // Dashboard endpoints (Protected by JWT Token)
 router.post('/data', authenticateToken, dashboardController.getDashboardData);
 router.get('/drive-alerts', authenticateToken, dashboardController.getDriveAlerts);
+router.get('/app-downloads', authenticateToken, dashboardController.getAppDownloads);
 router.post('/attendance', authenticateToken, dashboardController.markAttendance);
 router.get('/student-diary', authenticateToken, studentDiaryController.getStudentDiary);
 router.post('/student-diary/attendance', authenticateToken, studentDiaryController.markStudentAttendance);

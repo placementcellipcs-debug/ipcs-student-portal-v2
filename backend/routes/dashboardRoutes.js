@@ -9,6 +9,8 @@ const authenticateToken = require('../middleware/authMiddleware');
 router.post('/data', authenticateToken, dashboardController.getDashboardData);
 router.get('/drive-alerts', authenticateToken, dashboardController.getDriveAlerts);
 router.get('/app-downloads', authenticateToken, dashboardController.getAppDownloads);
+router.post('/app-downloads/:type/download-link', authenticateToken, dashboardController.createAppDownloadLink);
+router.get('/app-downloads/file', dashboardController.streamAppDownload);
 router.post('/attendance', authenticateToken, dashboardController.markAttendance);
 router.get('/student-diary', authenticateToken, studentDiaryController.getStudentDiary);
 router.post('/student-diary/attendance', authenticateToken, studentDiaryController.markStudentAttendance);

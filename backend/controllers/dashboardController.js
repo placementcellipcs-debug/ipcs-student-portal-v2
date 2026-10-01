@@ -3,6 +3,8 @@ const connectSheet = require('../config/db');
 const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
+const jwt = require('jsonwebtoken');
+const { pipeline } = require('node:stream/promises');
 
 // Helpers
 const buildCourseMap = async () => {
@@ -273,7 +275,7 @@ const getAppDownloads = async (req, res) => {
             q: `'${folderId.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' in parents and trashed = false`,
             pageSize: 100,
             orderBy: 'modifiedTime desc',
-            fields: 'files(id,name,mimeType,modifiedTime,size,version,md5Checksum,webViewLink,webContentLink)',
+            fields: 'files(id,name,mimeType,modifiedTime,size,version,md5Checksum)',
             supportsAllDrives: true,
             includeItemsFromAllDrives: true,
         }));
@@ -283,7 +285,6 @@ const getAppDownloads = async (req, res) => {
             const name = String(file.name || '').trim();
             const extension = name.toLowerCase().match(/\.(apk|exe)$/)?.[1];
             if (!extension || latestByType[extension]) continue;
-            const link = file.webContentLink || `https://drive.google.com/uc?export=download&id=${encodeURIComponent(file.id)}`;
             const releaseVersion = name.match(/(?:^|[^0-9])v?(\d+\.\d+(?:\.\d+){0,2}(?:[-+][0-9a-z.-]+)?)(?=[^0-9]|$)/i)?.[1];
             latestByType[extension] = {
                 id: file.id,
@@ -293,13 +294,89 @@ const getAppDownloads = async (req, res) => {
                 versionKey: [file.id, file.version || '', file.md5Checksum || '', file.modifiedTime || ''].join(':'),
                 modifiedTime: file.modifiedTime || null,
                 size: Number(file.size) || null,
-                url: link,
             };
         }
         return res.status(200).json({ success: true, downloads: { apk: latestByType.apk || null, exe: latestByType.exe || null } });
     } catch (error) {
         console.error('App download lookup failed:', error.message);
         return res.status(503).json({ success: false, message: 'The latest app downloads could not be loaded from Google Drive.' });
+    }
+};
+
+// Create a short-lived, download-only URL for the newest installer in the shared Drive folder.
+const createAppDownloadLink = async (req, res) => {
+    try {
+        const type = String(req.params.type || '').toLowerCase();
+        if (!['apk', 'exe'].includes(type)) return res.status(400).json({ success: false, message: 'Choose an APK or Windows installer.' });
+        if (!process.env.JWT_SECRET) return res.status(503).json({ success: false, message: 'Downloads are temporarily unavailable.' });
+
+        const folderId = String(process.env.APP_DOWNLOADS_DRIVE_FOLDER_ID || '12xh3OO3wZ1TDZcIg6kbmo1kmJKugi4yV').trim();
+        if (!folderId) return res.status(503).json({ success: false, message: 'App downloads are not configured.' });
+        const { google } = require('googleapis');
+        const { auth } = await connectSheet();
+        const drive = google.drive({ version: 'v3', auth });
+        const response = await DatabaseService.withRetry(() => drive.files.list({
+            q: `'${folderId.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' in parents and trashed = false`,
+            pageSize: 100,
+            orderBy: 'modifiedTime desc',
+            fields: 'files(id,name,modifiedTime,size,version,md5Checksum)',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+        }));
+        const file = (response.data.files || []).find((entry) => String(entry.name || '').trim().toLowerCase().endsWith(`.${type}`));
+        if (!file) return res.status(404).json({ success: false, message: `No ${type.toUpperCase()} installer is currently available.` });
+
+        const name = String(file.name || `Talenzo.${type}`).trim();
+        const versionKey = [file.id, file.version || '', file.md5Checksum || '', file.modifiedTime || ''].join(':');
+        const releaseVersion = name.match(/(?:^|[^0-9])v?(\d+\.\d+(?:\.\d+){0,2}(?:[-+][0-9a-z.-]+)?)(?=[^0-9]|$)/i)?.[1];
+        const token = jwt.sign({ purpose: 'app-installer-download', fileId: file.id, fileName: name, appType: type }, process.env.JWT_SECRET, { expiresIn: '2m' });
+        return res.status(200).json({
+            success: true,
+            downloadPath: `/api/dashboard/app-downloads/file?token=${encodeURIComponent(token)}`,
+            versionKey,
+            versionLabel: `Version ${releaseVersion || file.version || '1'}`,
+            fileName: name,
+        });
+    } catch (error) {
+        console.error('App download link creation failed:', error.message);
+        return res.status(503).json({ success: false, message: 'The download could not be prepared. Please try again.' });
+    }
+};
+
+// Stream a scoped, short-lived installer URL to the browser as a file download.
+const streamAppDownload = async (req, res) => {
+    try {
+        const secret = process.env.JWT_SECRET;
+        const token = String(req.query.token || '');
+        if (!secret || !token) return res.status(401).json({ success: false, message: 'This download link is invalid or has expired.' });
+        let claims;
+        try { claims = jwt.verify(token, secret); } catch {
+            return res.status(401).json({ success: false, message: 'This download link is invalid or has expired.' });
+        }
+        if (claims.purpose !== 'app-installer-download' || !claims.fileId || !['apk', 'exe'].includes(claims.appType)) {
+            return res.status(401).json({ success: false, message: 'This download link is invalid or has expired.' });
+        }
+
+        const { google } = require('googleapis');
+        const { auth } = await connectSheet();
+        const drive = google.drive({ version: 'v3', auth });
+        const response = await drive.files.get({ fileId: claims.fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'stream' });
+        const filename = String(claims.fileName || `Talenzo.${claims.appType}`).replace(/[\\/\r\n\u0000-\u001f\u007f]/g, '_').replace(/[";]/g, '').trim() || `Talenzo.${claims.appType}`;
+        const fallbackFilename = filename.replace(/[^\x20-\x7e]/g, '_');
+        const encodedFilename = encodeURIComponent(filename).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+        res.set({
+            'Content-Type': 'application/octet-stream',
+            'Content-Disposition': `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodedFilename}`,
+            'Cache-Control': 'private, no-store',
+            'X-Content-Type-Options': 'nosniff',
+        });
+        const length = response.headers?.['content-length'];
+        if (length) res.set('Content-Length', length);
+        await pipeline(response.data, res);
+    } catch (error) {
+        console.error('App installer stream failed:', error.message);
+        if (!res.headersSent) return res.status(502).json({ success: false, message: 'The installer could not be downloaded from Google Drive.' });
+        res.destroy(error);
     }
 };
 
@@ -658,4 +735,4 @@ const submitDriveResponse = async (req, res) => {
     }
 };
 
-module.exports = { getDashboardData, getDriveAlerts, getAppDownloads, markAttendance, applyForJob, updateProfile, uploadDocument, updatePassword, submitIssue, submitDriveResponse };
+module.exports = { getDashboardData, getDriveAlerts, getAppDownloads, createAppDownloadLink, streamAppDownload, markAttendance, applyForJob, updateProfile, uploadDocument, updatePassword, submitIssue, submitDriveResponse };

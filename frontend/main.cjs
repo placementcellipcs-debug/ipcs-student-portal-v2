@@ -19,17 +19,14 @@ function createWindow () {
   splash.loadFile(path.join(__dirname, 'splash.html'));
   splash.once('ready-to-show', () => splash.show());
 
+  function createWindow () {
   const win = new BrowserWindow({
     width: 1280,
-    height: 850,
-    show: false,
-    autoHideMenuBar: true,
-    backgroundColor: '#0B0F17',
-    icon: path.join(__dirname, 'src-tauri', 'icons', 'icon.ico'),
+    height: 800,
+    icon: path.join(__dirname, 'src-tauri/icons/icon.ico'), // Add this line
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
+      nodeIntegration: true
+    }
   });
 
   let splashTimer;
@@ -53,3 +50,4 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+}

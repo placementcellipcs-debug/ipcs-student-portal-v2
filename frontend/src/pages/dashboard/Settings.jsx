@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import ModalPortal from '../../components/ui/ModalPortal';
 
 const downloadSeenKey = (type) => `talenzo_app_download_seen_${type}`;
 const previousDownloadIds = { apk: '1D8vnuerOECQyZuvpjhYSeVG7A4B7ZTKV', exe: '1Xmf6gAeXxaoTmxEjpmrUnYlGHy7dMXM3' };
@@ -12,6 +13,9 @@ export default function Settings() {
   const [passwordStatus, setPasswordStatus] = useState(null);
   const [savingPassword, setSavingPassword] = useState(false);
   const [appDownloads, setAppDownloads] = useState({ loading: true, error: '', files: { apk: null, exe: null }, newVersions: { apk: false, exe: false } });
+  const [selectedDownload, setSelectedDownload] = useState(null);
+  const [startingDownload, setStartingDownload] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +75,29 @@ export default function Settings() {
       });
     } finally {
       setSavingPassword(false);
+    }
+  };
+
+  const startAppDownload = async () => {
+    if (!selectedDownload || startingDownload) return;
+    setStartingDownload(true);
+    setDownloadError('');
+    try {
+      const response = await api.post(`/api/dashboard/app-downloads/${selectedDownload.type}/download-link`);
+      if (!response.data?.success || !response.data?.downloadPath) throw new Error(response.data?.message || 'The download could not be prepared.');
+      try {
+        if (response.data.versionKey) localStorage.setItem(downloadSeenKey(selectedDownload.type), response.data.versionKey);
+      } catch { /* Downloading should still work when browser storage is unavailable. */ }
+      setAppDownloads((current) => ({ ...current, newVersions: { ...current.newVersions, [selectedDownload.type]: false } }));
+
+      // A Content-Disposition: attachment response makes the browser save the file to its normal Downloads location.
+      const downloadUrl = new URL(response.data.downloadPath, api.defaults.baseURL || window.location.origin);
+      window.location.assign(downloadUrl.toString());
+      setSelectedDownload(null);
+    } catch (error) {
+      setDownloadError(error.response?.data?.message || error.message || 'The download could not be started. Please try again.');
+    } finally {
+      setStartingDownload(false);
     }
   };
 
@@ -158,13 +185,10 @@ export default function Settings() {
             ].map(({ type, label, icon, color }) => {
               const file = appDownloads.files[type];
               return file ? (
-                <a key={type} href={file.url} target="_blank" rel="noopener noreferrer" className="btn-action" onClick={() => {
-                  try { if (file.versionKey) localStorage.setItem(downloadSeenKey(type), file.versionKey); } catch { /* The download still opens if browser storage is disabled. */ }
-                  setAppDownloads((current) => ({ ...current, newVersions: { ...current.newVersions, [type]: false } }));
-                }} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}>
+                <button key={type} type="button" className="btn-action" onClick={() => { setSelectedDownload({ type, file }); setDownloadError(''); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textAlign: 'left', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151' }}>
                   <i className={`ph ${icon}`} style={{ color, fontSize: '1.2rem' }}></i>
                   <span>{label}<small style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'var(--text-muted)', fontSize: '.7rem', marginTop: '3px' }}>{file.versionLabel || 'Latest version'}{appDownloads.newVersions[type] && <strong style={{ color: '#34d399', fontSize: '.66rem' }}>New version available</strong>}</small></span>
-                </a>
+                </button>
               ) : (
                 <button key={type} type="button" className="btn-action" disabled style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#1f2937', color: '#fff', border: '1px solid #374151', opacity: .72 }}>
                   <i className={`ph ${icon}`} style={{ color, fontSize: '1.2rem' }}></i>
@@ -194,6 +218,30 @@ export default function Settings() {
           )}
         </section>
       </div>
+      {selectedDownload && (
+        <ModalPortal>
+          <div className="report-modal-overlay app-download-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !startingDownload) setSelectedDownload(null); }}>
+            <section className="report-card app-download-confirmation" role="dialog" aria-modal="true" aria-labelledby="app-download-title" aria-describedby="app-download-description">
+              <div className="app-download-confirmation-icon"><i className={`ph ${selectedDownload.type === 'apk' ? 'ph-android-logo' : 'ph-windows-logo'}`}></i></div>
+              <p className="eyebrow">Secure installer download</p>
+              <h2 id="app-download-title">Download Talenzo for {selectedDownload.type === 'apk' ? 'Android' : 'Windows'}?</h2>
+              <p id="app-download-description">The latest installer will be downloaded from the shared Applications folder and saved by your browser to its usual Downloads location.</p>
+              <div className="app-download-file-summary">
+                <i className="ph ph-file-arrow-down"></i>
+                <span><strong>{selectedDownload.file.name}</strong><small>{selectedDownload.file.versionLabel || 'Latest version'}</small></span>
+              </div>
+              {downloadError && <p className="alert alert-error" role="alert">{downloadError}</p>}
+              <div className="app-download-modal-actions">
+                <button type="button" className="btn-cancel" disabled={startingDownload} onClick={() => setSelectedDownload(null)}>Cancel</button>
+                <button type="button" className="btn-action" disabled={startingDownload} onClick={startAppDownload}>
+                  <i className={`ph ${startingDownload ? 'ph-spinner-gap' : 'ph-download-simple'}`}></i>
+                  {startingDownload ? 'Preparing download…' : 'Download installer'}
+                </button>
+              </div>
+            </section>
+          </div>
+        </ModalPortal>
+      )}
     </section>
   );
 }

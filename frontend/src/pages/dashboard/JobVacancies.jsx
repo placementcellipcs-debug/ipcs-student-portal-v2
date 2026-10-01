@@ -40,6 +40,11 @@ const isEventExpired = (dateStr) => {
   return eventDate < today;
 };
 
+const displayOpeningId = (value) => {
+  const openingId = String(value || '').trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(openingId) ? '' : openingId;
+};
+
 export default function JobVacancies() {
   const { user } = useOutletContext();
   const [vacancies, setVacancies] = useState([]);
@@ -156,6 +161,7 @@ export default function JobVacancies() {
   const studentIsFresher = /fresher|no experience|entry.level/i.test(String(user?.fresherStatus || ''));
   const modalJobExpired = jobModal ? isEventExpired(jobModal.lastDate) : false;
   const modalJobApplied = jobModal ? appliedJobs.some((job) => String(job.jobId) === String(jobModal.newsletterId)) : false;
+  const modalOpeningId = displayOpeningId(jobModal?.newsletterId);
   const closeJobModal = () => {
     setJobModal(null);
     setActionStatus(null);
@@ -208,9 +214,10 @@ export default function JobVacancies() {
                      {stateVacancies.map((vacancy) => {
                        const isApplied = appliedJobs.some((job) => String(job.jobId).trim() === String(vacancy.newsletterId).trim());
                        const isExpired = isEventExpired(vacancy.lastDate);
+                       const visibleOpeningId = displayOpeningId(vacancy.newsletterId);
                        return (
                          <article className={`vacancy-card ${isExpired ? 'expired' : ''}`} key={vacancy.newsletterId}>
-                           <div className="vacancy-card-topline"><span className="vacancy-id">{vacancy.newsletterId}</span><span className={`vacancy-status ${isApplied ? 'applied' : isExpired ? 'expired' : 'active'}`}>{isApplied ? 'Applied' : isExpired ? 'Expired' : 'Accepting applications'}</span></div>
+                           <div className="vacancy-card-topline">{visibleOpeningId && <span className="vacancy-id">{visibleOpeningId}</span>}<span className={`vacancy-status ${isApplied ? 'applied' : isExpired ? 'expired' : 'active'}`}>{isApplied ? 'Applied' : isExpired ? 'Expired' : 'Accepting applications'}</span></div>
                            <div className="vacancy-title-row">
                              <CompanyLogo src={vacancy.companyLogo} company={vacancy.company} className="vacancy-company-logo" />
                              <div className="vacancy-title-block"><h2>{vacancy.position}</h2><p>{vacancy.company}</p></div>
@@ -253,7 +260,7 @@ export default function JobVacancies() {
               <div className="vacancy-modal-company-lockup">
                 <CompanyLogo src={jobModal.companyLogo} company={jobModal.company} className="vacancy-modal-logo" />
                 <div className="vacancy-modal-heading">
-                  <p>Opening details <span>·</span> {jobModal.newsletterId}</p>
+                  <p>Opening details{modalOpeningId && <> <span>·</span> {modalOpeningId}</>}</p>
                   <h2 id="vacancy-modal-title">{jobModal.position}</h2>
                   <strong>{jobModal.company}</strong>
                 </div>

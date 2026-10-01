@@ -29,7 +29,9 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "src-tauri/icons/icon.ico",
+      "icon": "src-tauri/icons/icon.ico"
+    },
+    "nsis": {
       "installerIcon": "src-tauri/icons/icon.ico",
       "uninstallerIcon": "src-tauri/icons/icon.ico"
     },

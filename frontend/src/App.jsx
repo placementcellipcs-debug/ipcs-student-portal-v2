@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 // Keep secondary portal pages out of the initial mobile download.
 const Login = lazy(() => import('./pages/auth/Login'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
 const Signup = lazy(() => import('./pages/auth/Signup'));
 const DashboardLayout = lazy(() => import('./components/layout/DashboardLayout'));
 const DashboardHome = lazy(() => import('./pages/dashboard/DashboardHome'));
@@ -43,6 +44,7 @@ export default function App() {
           {/* Public Auth Routes */}
           <Route path="/" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Protected Dashboard Routes */}
           <Route path="/dashboard" element={<DashboardLayout />}>

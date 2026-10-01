@@ -24,6 +24,9 @@ export default function Login() {
   const navigationTimer = useRef(null);
 
   const [showAuthForm, setShowAuthForm] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [isRequestingReset, setIsRequestingReset] = useState(false);
+  const [resetStatus, setResetStatus] = useState(null);
 
   const [liveUpdates] = useState([
     { name: "Anand Manikantan", role: "Data Analyst & Python Developer" },
@@ -93,6 +96,28 @@ export default function Login() {
       setStatus({ type: 'error', message: error.response?.data?.message || 'Server Error. Is the backend running?' });
     } finally {
       setIsAuthenticating(false);
+    }
+  };
+
+  const handleForgotPassword = async (event) => {
+    event.preventDefault();
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setResetStatus({ type: 'error', message: 'Enter your registered student email address.' });
+      return;
+    }
+    setIsRequestingReset(true);
+    setResetStatus({ type: 'info', message: 'Checking your student account…' });
+    try {
+      const response = await api.post('/api/auth/forgot-password', { email: cleanEmail });
+      setResetStatus({ type: 'success', message: response.data?.message || 'A reset link has been sent to your email. It expires in 5 minutes.' });
+    } catch (error) {
+      setResetStatus({
+        type: 'error',
+        message: error.response?.data?.message || 'We could not send the reset link. Please try again shortly.',
+      });
+    } finally {
+      setIsRequestingReset(false);
     }
   };
 
@@ -211,26 +236,48 @@ export default function Login() {
           ) : (
             <div className="auth-card animate-fade-in login-form-animate">
               <div className="brand-logo-container"><img src={ipcsGlobalLogo} alt="IPCS Global" className="auth-logo-img" /></div>
-              <h2 style={{ textAlign: 'center', margin: '0 0 6px 0', color: '#ffffff' }}>Welcome</h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', textAlign: 'center', marginBottom: '1.8rem' }}>Sign in to continue to your student portal</p>
-              <form onSubmit={handleLogin}>
-                <div className="form-group"><label>Email ID</label><input type="email" placeholder="student@ipcsglobal.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-                <div className="form-group"><label>Password</label>
-                  <div className="pwd-wrapper">
-                    <input type={showPassword ? "text" : "password"} placeholder="Enter password" style={{ paddingRight: '40px' }} value={password} onChange={(e) => setPassword(e.target.value)} />
-                    <span className="pwd-toggle" onClick={() => setShowPassword(!showPassword)}><i className={`ph ${showPassword ? 'ph-eye-slash' : 'ph-eye'}`}></i></span>
-                  </div>
-                </div>
-                <button type="submit" className="btn-action login-submit-button" disabled={isAuthenticating} style={{ width: '100%', marginTop: '0.8rem', padding: '1rem', borderRadius: '10px' }}>
-                  {isAuthenticating && <span className="login-status-spinner" aria-hidden="true"></span>}
-                  {isAuthenticating ? 'Signing in…' : 'Sign in →'}
-                </button>
-                {status && <div className={`login-auth-status ${status.type}`} role={status.type === 'error' ? 'alert' : 'status'} aria-live="polite">
-                  <i className={`ph ${status.type === 'error' ? 'ph-warning-circle' : 'ph-shield-check'}`} aria-hidden="true"></i>
-                  <span>{status.message}</span>
-                </div>}
-              </form>
-              <div className="switch-mode">Don't have an account? <span onClick={() => navigate('/signup')}>Create account</span></div>
+              {!isForgotPassword ? (
+                <>
+                  <h2 style={{ textAlign: 'center', margin: '0 0 6px 0', color: '#ffffff' }}>Welcome</h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', textAlign: 'center', marginBottom: '1.8rem' }}>Sign in to continue to your student portal</p>
+                  <form onSubmit={handleLogin}>
+                    <div className="form-group"><label htmlFor="login-email">Email ID</label><input id="login-email" type="email" autoComplete="username" placeholder="student@ipcsglobal.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                    <div className="form-group"><label htmlFor="login-password">Password</label>
+                      <div className="pwd-wrapper">
+                        <input id="login-password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Enter password" style={{ paddingRight: '40px' }} value={password} onChange={(e) => setPassword(e.target.value)} />
+                        <span className="pwd-toggle" onClick={() => setShowPassword(!showPassword)}><i className={`ph ${showPassword ? 'ph-eye-slash' : 'ph-eye'}`}></i></span>
+                      </div>
+                    </div>
+                    <div className="login-forgot-row"><button type="button" onClick={() => { setIsForgotPassword(true); setResetStatus(null); setStatus(null); }}>Forgot password?</button></div>
+                    <button type="submit" className="btn-action login-submit-button" disabled={isAuthenticating} style={{ width: '100%', marginTop: '0.8rem', padding: '1rem', borderRadius: '10px' }}>
+                      {isAuthenticating && <span className="login-status-spinner" aria-hidden="true"></span>}
+                      {isAuthenticating ? 'Signing in…' : 'Sign in →'}
+                    </button>
+                    {status && <div className={`login-auth-status ${status.type}`} role={status.type === 'error' ? 'alert' : 'status'} aria-live="polite">
+                      <i className={`ph ${status.type === 'error' ? 'ph-warning-circle' : 'ph-shield-check'}`} aria-hidden="true"></i>
+                      <span>{status.message}</span>
+                    </div>}
+                  </form>
+                  <div className="switch-mode">Don't have an account? <span onClick={() => navigate('/signup')}>Create account</span></div>
+                </>
+              ) : (
+                <>
+                  <h2 style={{ textAlign: 'center', margin: '0 0 6px 0', color: '#ffffff' }}>Reset your password</h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', textAlign: 'center', marginBottom: '1.8rem' }}>Enter the email address registered to your student account. We’ll email a link that expires in 5 minutes.</p>
+                  <form onSubmit={handleForgotPassword}>
+                    <div className="form-group"><label htmlFor="reset-email">Student email ID</label><input id="reset-email" type="email" autoComplete="email" placeholder="student@ipcsglobal.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                    <button type="submit" className="btn-action login-submit-button" disabled={isRequestingReset} style={{ width: '100%', marginTop: '0.8rem', padding: '1rem', borderRadius: '10px' }}>
+                      {isRequestingReset && <span className="login-status-spinner" aria-hidden="true"></span>}
+                      {isRequestingReset ? 'Checking account…' : 'Email reset link'}
+                    </button>
+                    {resetStatus && <div className={`login-auth-status ${resetStatus.type}`} role={resetStatus.type === 'error' ? 'alert' : 'status'} aria-live="polite">
+                      <i className={`ph ${resetStatus.type === 'error' ? 'ph-warning-circle' : resetStatus.type === 'success' ? 'ph-check-circle' : 'ph-shield-check'}`} aria-hidden="true"></i>
+                      <span>{resetStatus.message}</span>
+                    </div>}
+                  </form>
+                  <div className="switch-mode"><button type="button" onClick={() => { setIsForgotPassword(false); setResetStatus(null); }}>Back to sign in</button></div>
+                </>
+              )}
             </div>
           )}
         </div>

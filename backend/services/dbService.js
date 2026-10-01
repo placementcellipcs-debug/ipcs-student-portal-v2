@@ -24,7 +24,8 @@ class DatabaseService {
     // Now accepts a specific spreadsheet ID, defaults to the main portal ID
     static async getSheetData(range, targetSpreadsheetId = process.env.SPREADSHEET_ID, ttlSeconds = 600) {
         const cacheKey = `SHEET_${targetSpreadsheetId}_${range}_${ttlSeconds}`;
-        let data = dbCache.get(cacheKey);
+        const shouldCache = ttlSeconds > 0;
+        let data = shouldCache ? dbCache.get(cacheKey) : null;
         if (data) return data; 
 
         const { googleSheets, auth } = await connectSheet();
@@ -36,7 +37,7 @@ class DatabaseService {
         }));
         
         data = response.data.values || [];
-        dbCache.set(cacheKey, data, ttlSeconds);
+        if (shouldCache) dbCache.set(cacheKey, data, ttlSeconds);
         return data;
     }
 
@@ -51,6 +52,19 @@ class DatabaseService {
             resource: { values: [rowData] } 
         }));
         
+        dbCache.flushAll();
+        return true;
+    }
+
+    static async appendRowRaw(range, rowData, targetSpreadsheetId = process.env.SPREADSHEET_ID) {
+        const { googleSheets, auth } = await connectSheet();
+        await this.withRetry(() => googleSheets.spreadsheets.values.append({
+            auth,
+            spreadsheetId: targetSpreadsheetId,
+            range,
+            valueInputOption: 'RAW',
+            resource: { values: [rowData] },
+        }));
         dbCache.flushAll();
         return true;
     }
@@ -121,6 +135,17 @@ class DatabaseService {
             resource: { values: [rowData] } 
         }));
         
+        dbCache.flushAll();
+        return true;
+    }
+
+    static async updateRanges(updates, targetSpreadsheetId = process.env.SPREADSHEET_ID) {
+        const { googleSheets, auth } = await connectSheet();
+        await this.withRetry(() => googleSheets.spreadsheets.values.batchUpdate({
+            auth,
+            spreadsheetId: targetSpreadsheetId,
+            resource: { valueInputOption: 'RAW', data: updates },
+        }));
         dbCache.flushAll();
         return true;
     }

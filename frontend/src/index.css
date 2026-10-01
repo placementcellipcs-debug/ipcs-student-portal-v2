@@ -1631,6 +1631,7 @@ select { cursor: pointer; }
 .login-auth-status > i { flex: 0 0 auto; font-size: 1.15rem; }
 .login-auth-status.info { color: #7dd3fc; background: rgba(14,165,233,.1); border-color: rgba(56,189,248,.3); }
 .login-auth-status.error { color: #fca5a5; background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.3); }
+.login-auth-status.success { color: #6ee7b7; background: rgba(16,185,129,.1); border-color: rgba(52,211,153,.28); }
 @keyframes login-status-spin { to { transform: rotate(360deg); } }
 
 /* GamePal game art and group rooms */

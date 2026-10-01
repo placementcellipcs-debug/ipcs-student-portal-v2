@@ -26,4 +26,18 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.data?.code === 'SESSION_REVOKED') {
+      try {
+        localStorage.removeItem('talentino_student_token');
+        localStorage.removeItem('talentino_student_user');
+      } catch { /* The API still rejects revoked sessions if browser storage is unavailable. */ }
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard')) window.location.replace('/');
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;

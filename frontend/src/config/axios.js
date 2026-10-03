@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Automatically points to your Render backend in production, or localhost in development
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// Support the portal's backend setting and the native-app API setting.
+// Local development falls back to the Express server on this machine.
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

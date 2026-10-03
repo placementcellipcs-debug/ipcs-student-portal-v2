@@ -66,6 +66,126 @@ const buildResetEmail = ({ name, resetLink, includeLogo }) => {
     };
 };
 
+const sendResetEmailThroughAppsScript = async ({ recipient, name, emailContent, logoBase64 }) => {
+    const sharedSecret = String(process.env.APPS_SCRIPT_MAIL_SECRET || '').trim();
+    const endpointUrls = [...new Set([
+        process.env.APPS_SCRIPT_MAIL_URL,
+        process.env.APPS_SCRIPT_MAIL_FALLBACK_URL,
+    ].map((url) => String(url || '').trim()).filter(Boolean))];
+    if (!sharedSecret || endpointUrls.length === 0) {
+        throw new Error('Apps Script mail gateway is not configured.');
+    }
+
+    const payload = {
+        version: 1,
+        requestId: crypto.randomUUID(),
+        timestamp: Date.now(),
+        to: recipient,
+        name: name || 'Student',
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+        logoBase64: logoBase64 || '',
+    };
+    const canonicalPayload = JSON.stringify(payload);
+    payload.signature = crypto.createHmac('sha256', sharedSecret).update(canonicalPayload).digest('base64');
+
+    let lastError = null;
+    for (let index = 0; index < endpointUrls.length; index += 1) {
+        try {
+            const response = await axios.post(endpointUrls[index], payload, {
+                timeout: 12000,
+                maxRedirects: 5,
+                headers: { 'Content-Type': 'application/json' },
+            });
+            if (response.data?.success === true) return response.data;
+            throw new Error(response.data?.message || 'Apps Script mail gateway rejected the request.');
+        } catch (error) {
+            lastError = error;
+            console.error('Password reset Apps Script endpoint failed:', {
+                endpointNumber: index + 1,
+                code: error.code,
+                status: error.response?.status,
+                message: error.message,
+            });
+        }
+    }
+    throw new Error(`All configured Apps Script mail endpoints failed: ${lastError?.message || 'unknown error'}`);
+};
+
+const sendResetEmailThroughNodemailer = async ({ recipient, emailContent }) => {
+    const user = String(process.env.EMAIL_USER || '').trim();
+    const password = String(process.env.EMAIL_PASS || '').replace(/\s/g, '');
+    if (!user || !password) throw new Error('Nodemailer SMTP is not configured.');
+
+    const host = String(process.env.SMTP_HOST || '').trim();
+    const port = Number(process.env.SMTP_PORT || (host ? 587 : 465));
+    const secure = String(process.env.SMTP_SECURE || (port === 465 ? 'true' : 'false')).toLowerCase() === 'true';
+    const transportOptions = {
+        auth: { user, pass: password },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+    };
+    if (host) Object.assign(transportOptions, { host, port, secure });
+    else Object.assign(transportOptions, { service: 'gmail' });
+
+    const transporter = nodemailer.createTransport(transportOptions);
+    await transporter.sendMail({
+        from: process.env.EMAIL_FROM || user,
+        to: recipient,
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+        attachments: emailContent.logoPath ? [{
+            filename: 'ipcs-global-logo.png',
+            path: emailContent.logoPath,
+            cid: 'ipcs-global-logo',
+        }] : [],
+    });
+};
+
+const deliverPasswordResetEmail = async ({ recipient, name, emailContent, logoBase64 }) => {
+    const errors = [];
+    const scriptUrl = String(process.env.APPS_SCRIPT_MAIL_URL || '').trim();
+    const scriptFallbackUrl = String(process.env.APPS_SCRIPT_MAIL_FALLBACK_URL || '').trim();
+    const scriptSecret = String(process.env.APPS_SCRIPT_MAIL_SECRET || '').trim();
+    const hasAppsScriptSettings = Boolean(scriptUrl || scriptFallbackUrl || scriptSecret);
+    const hasSmtpSettings = Boolean(String(process.env.EMAIL_USER || '').trim() && String(process.env.EMAIL_PASS || '').trim());
+
+    if (hasAppsScriptSettings) {
+        try {
+            await sendResetEmailThroughAppsScript({ recipient, name, emailContent, logoBase64 });
+            console.info('Password reset email delivered with Google Apps Script.');
+            return 'apps-script';
+        } catch (error) {
+            errors.push(`Apps Script: ${error.message}`);
+            console.error('Apps Script reset-email delivery failed; trying Nodemailer fallback:', error.message);
+        }
+    }
+
+    if (hasSmtpSettings) {
+        try {
+            await sendResetEmailThroughNodemailer({ recipient, emailContent });
+            console.info('Password reset email delivered with Nodemailer SMTP.');
+            return 'nodemailer';
+        } catch (error) {
+            errors.push(`Nodemailer SMTP: ${error.message}`);
+            console.error('Nodemailer reset-email delivery failed:', {
+                code: error.code,
+                command: error.command,
+                responseCode: error.responseCode,
+                message: error.message,
+            });
+        }
+    }
+
+    if (errors.length === 0) {
+        throw new Error('No reset-email provider is fully configured. Set Apps Script settings or EMAIL_USER and EMAIL_PASS for Nodemailer.');
+    }
+    throw new Error(`All configured password-reset email providers failed. ${errors.join(' | ')}`);
+};
+
 const requestPasswordReset = async (req, res) => {
     try {
         const email = String(req.body?.email || '').trim().toLowerCase();
@@ -76,9 +196,10 @@ const requestPasswordReset = async (req, res) => {
         const studentRows = await DatabaseService.getSheetData('Data!B:D', process.env.SPREADSHEET_ID, 0);
         const student = findStudentByEmail(studentRows, email);
         if (!student) return res.status(404).json({ success: false, code: 'ACCOUNT_NOT_FOUND', message: 'Student account not found. Check the email address registered with IPCS Global.' });
-        const mailUser = String(process.env.EMAIL_USER || '').trim();
-        const mailPassword = String(process.env.EMAIL_PASS || '').replace(/\s/g, '');
-        if (!mailUser || !mailPassword) {
+        const hasAppsScriptUrl = Boolean(String(process.env.APPS_SCRIPT_MAIL_URL || '').trim() || String(process.env.APPS_SCRIPT_MAIL_FALLBACK_URL || '').trim());
+        const hasAppsScriptSecret = Boolean(String(process.env.APPS_SCRIPT_MAIL_SECRET || '').trim());
+        const hasSmtpSettings = Boolean(String(process.env.EMAIL_USER || '').trim() && String(process.env.EMAIL_PASS || '').trim());
+        if (!(hasAppsScriptUrl && hasAppsScriptSecret) && !hasSmtpSettings) {
             return res.status(503).json({ success: false, message: 'Password reset email is not configured. Please contact your portal administrator.' });
         }
 
@@ -97,31 +218,18 @@ const requestPasswordReset = async (req, res) => {
         const resetLink = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
         const logoPath = path.resolve(__dirname, '../../frontend/src/assets/ipcs-global-logo.png');
         const includeLogo = fs.existsSync(logoPath);
-        const emailContent = buildResetEmail({ name: student.name, resetLink, includeLogo });
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: { user: mailUser, pass: mailPassword },
-            connectionTimeout: 10000,
-            greetingTimeout: 10000,
-            socketTimeout: 20000,
-        });
+        const logoBase64 = includeLogo ? fs.readFileSync(logoPath).toString('base64') : '';
+        const emailContent = { ...buildResetEmail({ name: student.name, resetLink, includeLogo }), logoPath: includeLogo ? logoPath : '' };
 
         try {
-            await transporter.sendMail({
-                from: process.env.EMAIL_FROM || mailUser,
-                to: student.email,
-                subject: emailContent.subject,
-                text: emailContent.text,
-                html: emailContent.html,
-                attachments: includeLogo ? [{ filename: 'ipcs-global-logo.png', path: logoPath, cid: 'ipcs-global-logo' }] : [],
+            await deliverPasswordResetEmail({
+                recipient: student.email,
+                name: student.name,
+                emailContent,
+                logoBase64,
             });
         } catch (mailError) {
-            console.error('Password reset email failed:', {
-                code: mailError.code,
-                command: mailError.command,
-                responseCode: mailError.responseCode,
-                message: mailError.message,
-            });
+            console.error('Password reset email failed through all configured providers:', mailError.message);
             try {
                 if (Number.isInteger(tokenRowNumber) && tokenRowNumber > 1) {
                     await DatabaseService.updateRow(`${RESET_SHEET}!D${tokenRowNumber}`, ['FAILED']);

@@ -14,6 +14,7 @@ const allowedOrigins = [...new Set([
   ...(process.env.NATIVE_APP_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
   'http://localhost:5173',
   'http://localhost:3000',
+  'https://ipcstalenzo.com',
   'https://placement.ipcsglobal.info',          // Main Production Frontend
   'https://ipcs-student-portal-v2.vercel.app',  // Vercel Testing Frontend
   'capacitor://localhost',                     // Native Mobile Fallback

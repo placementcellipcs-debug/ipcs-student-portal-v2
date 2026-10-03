@@ -41,7 +41,7 @@ function createWindow () {
   win.webContents.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => {
     if (isMainFrame) revealPortal();
   });
-  win.loadURL('https://placement.ipcsglobal.info');
+  win.loadURL('https://ipcstalenzo.com');
   splashTimer = setTimeout(revealPortal, 15_000);
 }
 

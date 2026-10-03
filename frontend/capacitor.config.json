@@ -4,7 +4,7 @@
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
-    "url": "https://placement.ipcsglobal.info",
+    "url": "https://ipcstalenzo.com",
     "cleartext": true
   },
     "plugins": {

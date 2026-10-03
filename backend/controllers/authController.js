@@ -213,7 +213,7 @@ const requestPasswordReset = async (req, res) => {
         const tokenAppendRange = await DatabaseService.appendRowRaw(`${RESET_SHEET}!A:E`, [tokenHash, email, expiresAt.toISOString(), 'PENDING', createdAt.toISOString()]);
         const tokenRowNumber = Number(String(tokenAppendRange).match(/!A(\d+):E\d+$/)?.[1]);
 
-        const baseUrl = String(process.env.RESET_PASSWORD_BASE_URL || process.env.FRONTEND_URL || 'https://placement.ipcsglobal.info')
+        const baseUrl = String(process.env.RESET_PASSWORD_BASE_URL || process.env.FRONTEND_URL || 'https://ipcstalenzo.com')
             .split(',')[0].trim().replace(/\/+$/, '');
         const resetLink = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
         const logoPath = path.resolve(__dirname, '../../frontend/src/assets/ipcs-global-logo.png');

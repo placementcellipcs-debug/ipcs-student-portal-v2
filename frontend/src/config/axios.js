@@ -1,8 +1,12 @@
 import axios from 'axios';
 
 // Support the portal's backend setting and the native-app API setting.
-// Local development falls back to the Express server on this machine.
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// Keep hosted builds connected to the production API even if the hosting
+// provider hasn't injected Vite environment variables for this deployment.
+// Local development still falls back to the Express server on this machine.
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
+  || import.meta.env.VITE_API_URL
+  || (import.meta.env.PROD ? 'https://ipcs-student-portal-v2.onrender.com' : 'http://localhost:5000');
 
 const api = axios.create({
   baseURL: API_BASE_URL,

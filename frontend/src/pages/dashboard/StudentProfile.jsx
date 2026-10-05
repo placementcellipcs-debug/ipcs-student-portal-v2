@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import { formatPortalDate, portalDateInputValue } from '../../utils/portalDate';
 import DriveImage from '../../components/ui/DriveImage';
 import ModalPortal from '../../components/ui/ModalPortal';
 
@@ -47,7 +48,7 @@ export default function StudentProfile() {
     setEpData({
         age: user?.age || '', gender: user?.gender || 'Male', parentName: user?.parentName || '', 
         parentContact: user?.parentContact || '', studyStatus: user?.studyStatus || 'Currently Studying', 
-        completedDate: user?.completedDate && user.completedDate !== 'N/A' && !user.completedDate.includes('google') ? user.completedDate : '',
+        completedDate: user?.completedDate && user.completedDate !== 'N/A' && !user.completedDate.includes('google') ? portalDateInputValue(user.completedDate) : '',
         stream: user?.stream || '', homeTown: user?.homeTown || '', fresherStatus: user?.fresherStatus || 'Fresher', 
         qualification: user?.qualification || '', linkedin: user?.linkedin || '', instagram: user?.instagram || '', 
         placementReq: user?.placementReq || ''
@@ -170,7 +171,7 @@ export default function StudentProfile() {
             <div className="info-bento-grid">
               <div><div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Course Category</div><div style={{ fontWeight: 800, color: '#e2e8f0', fontSize: '1.05rem' }}>{user?.course || 'N/A'}</div></div>
               <div><div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Study Status</div><div style={{ fontWeight: 800, color: '#e2e8f0', fontSize: '1.05rem' }}>{user?.studyStatus || 'Currently Studying'}</div></div>
-              <div><div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Joining Date</div><div style={{ fontWeight: 800, color: '#e2e8f0', fontSize: '1.05rem' }}>{user?.joiningDate && user.joiningDate !== 'N/A' && user.joiningDate !== 'undefined' ? user.joiningDate : 'Not Provided'}</div></div>
+              <div><div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Joining Date</div><div style={{ fontWeight: 800, color: '#e2e8f0', fontSize: '1.05rem' }}>{user?.joiningDate && user.joiningDate !== 'N/A' && user.joiningDate !== 'undefined' ? (formatPortalDate(user.joiningDate) || user.joiningDate) : 'Not Provided'}</div></div>
               <div><div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Qualification</div><div style={{ fontWeight: 800, color: '#e2e8f0', fontSize: '1.05rem' }}>{user?.qualification || 'Not Provided'}</div></div>
               <div><div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Stream / Branch</div><div style={{ fontWeight: 800, color: '#e2e8f0', fontSize: '1.05rem' }}>{user?.stream || 'Not Provided'}</div></div>
               <div><div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Experience Status</div><div style={{ fontWeight: 800, color: '#e2e8f0', fontSize: '1.05rem' }}>{user?.fresherStatus || 'Not Provided'}</div></div>
@@ -252,7 +253,7 @@ export default function StudentProfile() {
               <div className="form-group"><label>Parent / Guardian Name</label><input type="text" value={epData.parentName} onChange={(e) => setEpData({...epData, parentName: e.target.value})} /></div>
               <div className="form-group"><label>Parent Contact No.</label><input type="tel" value={epData.parentContact} onChange={(e) => setEpData({...epData, parentContact: e.target.value})} /></div>
               <div className="form-group"><label>Studying Status</label><select value={epData.studyStatus} onChange={(e) => setEpData({...epData, studyStatus: e.target.value})}><option value="Currently Studying">Currently Studying</option><option value="Completed Course">Completed Course</option></select></div>
-              <div className="form-group"><label>Course Completed Date</label><input type="date" value={epData.completedDate} onChange={(e) => setEpData({...epData, completedDate: e.target.value})} /></div>
+              <div className="form-group"><label>Course Completed Date</label><input type="date" lang="en-GB" value={epData.completedDate} onChange={(e) => setEpData({...epData, completedDate: e.target.value})} /></div>
               <div className="form-group"><label>Stream</label><input type="text" value={epData.stream} onChange={(e) => setEpData({...epData, stream: e.target.value})} /></div>
               <div className="form-group"><label>Home Town</label><input type="text" value={epData.homeTown} onChange={(e) => setEpData({...epData, homeTown: e.target.value})} /></div>
               <div className="form-group"><label>Fresher Status</label><select value={epData.fresherStatus} onChange={(e) => setEpData({...epData, fresherStatus: e.target.value})}><option value="Fresher">Fresher</option><option value="Experienced">Experienced</option></select></div>

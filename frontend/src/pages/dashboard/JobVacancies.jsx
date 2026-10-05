@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../../components/ui/DriveImage';
+import { formatPortalDate, isEventPast } from '../../utils/portalDate';
 
 function CompanyLogo({ src, company, className = '' }) {
   return (
@@ -14,31 +15,11 @@ function CompanyLogo({ src, company, className = '' }) {
   );
 }
 
-const parseSafeDate = (dateStr) => {
-  if (!dateStr || dateStr === "N/A" || dateStr === "undefined" || String(dateStr).toUpperCase() === "TBA") return null;
-  let cleanStr = String(dateStr).replace(/,/g, '').replace(/\s+/g, ' ').trim();
-  const parts = cleanStr.split(/[-/]/);
-  if (parts.length === 3) {
-      const yearFirst = parts[0].length === 4;
-      const year = Number(yearFirst ? parts[0] : parts[2]);
-      const month = Number(yearFirst ? parts[1] : parts[0]);
-      const day = Number(yearFirst ? parts[2] : parts[1]);
-      const parsedDate = new Date(year, month - 1, day);
-      if (parsedDate.getFullYear() === year && parsedDate.getMonth() === month - 1 && parsedDate.getDate() === day) return parsedDate;
-  }
-  const parsedDate = new Date(cleanStr);
-  if (!isNaN(parsedDate.getTime())) return parsedDate;
-  return null;
+const isEventExpired = (dateStr) => {
+  return isEventPast(dateStr);
 };
 
-const isEventExpired = (dateStr) => {
-  if (!dateStr || String(dateStr).toUpperCase() === "TBA") return false;
-  const eventDate = parseSafeDate(dateStr);
-  if (!eventDate) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return eventDate < today;
-};
+const formatDateOrText = (value) => formatPortalDate(value) || (value ? String(value) : '—');
 
 const displayOpeningId = (value) => {
   const openingId = String(value || '').trim();
@@ -227,7 +208,7 @@ export default function JobVacancies() {
                              <div><dt>Openings</dt><dd>{vacancy.openings}</dd></div>
                              <div><dt>Experience</dt><dd>{vacancy.experience}</dd></div>
                              <div><dt>Salary</dt><dd>{vacancy.salary}</dd></div>
-                             <div><dt>Apply by</dt><dd>{vacancy.lastDate}</dd></div>
+                             <div><dt>Apply by</dt><dd>{formatDateOrText(vacancy.lastDate)}</dd></div>
                            </dl>
                            <div className="vacancy-card-footer">
                              <button type="button" className="btn-action vacancy-view-button" onClick={() => { setJobModal(vacancy); setActionStatus(null); setShowConsent(false); setQ1(false); setQ2(false); }}>View details <i className="ph ph-arrow-up-right"></i></button>
@@ -274,8 +255,8 @@ export default function JobVacancies() {
                 <div><dt>Openings</dt><dd>{jobModal.openings}</dd></div>
                 <div><dt>Experience</dt><dd>{jobModal.experience}</dd></div>
                 <div><dt>Salary</dt><dd>{jobModal.salary}</dd></div>
-                <div><dt>Interview date</dt><dd>{jobModal.interviewDate}</dd></div>
-                <div><dt>Apply by</dt><dd>{jobModal.lastDate}</dd></div>
+                <div><dt>Interview date</dt><dd>{formatDateOrText(jobModal.interviewDate)}</dd></div>
+                <div><dt>Apply by</dt><dd>{formatDateOrText(jobModal.lastDate)}</dd></div>
               </dl>
               <section className="vacancy-modal-section">
                 <h3>Qualification required</h3>

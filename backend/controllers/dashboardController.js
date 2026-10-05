@@ -22,15 +22,8 @@ const buildCourseMap = async () => {
 };
 
 function isSameDay(dateStr, now) {
-    if (!dateStr) return false;
-    let cleanStr = String(dateStr).replace(/,/g, '').replace(/\s+/g, ' ').trim();
-    let parsedDate = new Date(cleanStr);
-    if (isNaN(parsedDate.getTime())) {
-        let parts = cleanStr.split(/[-/]/);
-    if (parts.length === 3) parsedDate = parts[0].length === 4 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date(parts[2], parts[0] - 1, parts[1]);
-    }
-    if (!isNaN(parsedDate.getTime())) return parsedDate.getDate() === now.getDate() && parsedDate.getMonth() === now.getMonth() && parsedDate.getFullYear() === now.getFullYear();
-    return false;
+    const scheduledDate = parseDateKey(dateStr);
+    return Boolean(scheduledDate && scheduledDate === dateKeyInIndia(now));
 }
 
 function calculateDistanceInMeters(lat1, lon1, lat2, lon2) {
@@ -41,25 +34,68 @@ function calculateDistanceInMeters(lat1, lon1, lat2, lon2) {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-const dateKeyInIndia = (date) => new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
-}).format(date);
+const dateKeyInIndia = (date) => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(date).map((part) => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+};
 const parseDateKey = (value) => {
     const text = String(value || '').replace(/,/g, '').trim();
     if (!text || /^tba$/i.test(text)) return null;
     let match = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-    if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+    if (match) {
+        const [, yearText, monthText, dayText] = match;
+        const year = Number(yearText); const month = Number(monthText); const day = Number(dayText);
+        const check = new Date(Date.UTC(year, month - 1, day));
+        if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return null;
+        return `${yearText}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
     match = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
     if (match) {
         const first = Number(match[1]);
         const second = Number(match[2]);
-        const month = first;
-        const day = second;
-        if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+        // Prefer the portal's DD/MM/YYYY sheet format. Keep unambiguous legacy
+        // M/D/YYYY values readable when the second number cannot be a month.
+        const monthFirst = first <= 12 && second > 12;
+        const month = monthFirst ? first : second;
+        const day = monthFirst ? second : first;
+        const year = Number(match[3]);
+        const check = new Date(Date.UTC(year, month - 1, day));
+        if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return null;
         return `${match[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     }
     const date = new Date(text);
     return Number.isNaN(date.getTime()) ? null : dateKeyInIndia(date);
+};
+
+const parseEventTime = (value) => {
+    const text = String(value || '').trim();
+    const match = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?$/i);
+    if (!match) return null;
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const second = Number(match[3] || 0);
+    const meridiem = (match[4] || '').toLowerCase();
+    if (minute > 59 || second > 59 || hour > (meridiem ? 12 : 23) || (meridiem && hour === 0)) return null;
+    if (meridiem === 'pm' && hour < 12) hour += 12;
+    if (meridiem === 'am' && hour === 12) hour = 0;
+    return { hour, minute, second };
+};
+
+const isEventPast = (dateValue, timeValue, now = new Date()) => {
+    const key = parseDateKey(dateValue);
+    if (!key) return false;
+    const [year, month, day] = key.split('-').map(Number);
+    const time = parseEventTime(timeValue);
+    const deadline = new Date(Date.UTC(
+        year, month - 1, day,
+        time ? time.hour : 23,
+        time ? time.minute : 59,
+        time ? time.second : 59,
+        time ? 0 : 999,
+    ) - (5 * 60 + 30) * 60 * 1000);
+    return now.getTime() > deadline.getTime();
 };
 
 const getCol = (row, idx, fallback = "") => (row && row[idx] !== undefined && row[idx] !== null) ? row[idx].toString().trim() : fallback;
@@ -239,13 +275,12 @@ const getDriveAlerts = async (req, res) => {
             DatabaseService.getSheetData('Event!A:K', process.env.SPREADSHEET_ID, 10),
             DatabaseService.getSheetData('Drive_Registration!A:J', process.env.SPREADSHEET_ID, 10),
         ]);
-        const today = dateKeyInIndia(new Date());
         const drives = [];
         for (let index = 1; index < eventRows.length; index++) {
             const row = eventRows[index];
             const type = getCol(row, 3).toLowerCase();
             const date = parseDateKey(getCol(row, 0));
-            if (!type.includes('placement drive') || !date || date < today || !branchMatches(getCol(row, 2, 'All'), student.branch)) continue;
+            if (!type.includes('placement drive') || !date || isEventPast(getCol(row, 0), getCol(row, 6)) || !branchMatches(getCol(row, 2, 'All'), student.branch)) continue;
             drives.push({
                 date: row[0] || 'TBA', branch: row[2] || 'All', type: row[3] || 'PLACEMENT DRIVE',
                 title: row[4] || 'Placement Drive', description: row[5] || '', time: row[6] || '',
@@ -696,8 +731,7 @@ const submitDriveResponse = async (req, res) => {
         });
         if (!event) return res.status(404).json({ success: false, message: 'This placement drive is no longer available.' });
         if (!branchMatches(getCol(event, 2, 'All'), student.branch)) return res.status(403).json({ success: false, message: 'This drive is not assigned to your branch.' });
-        const eventDate = parseDateKey(getCol(event, 0));
-        if (eventDate && eventDate < dateKeyInIndia(new Date())) return res.status(400).json({ success: false, message: 'This placement drive has already passed.' });
+        if (isEventPast(getCol(event, 0), getCol(event, 6))) return res.status(400).json({ success: false, message: 'This placement drive has already passed.' });
         for (let i = 1; i < rows.length; i++) {
             if (rows[i][0] === targetDriveId && normalize(rows[i][3]) === email) {
                 return res.status(400).json({ success: false, message: 'You have already submitted a response for this drive.' });

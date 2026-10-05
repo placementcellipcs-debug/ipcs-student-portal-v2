@@ -3,6 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import Counter from '../../components/ui/Counter';
 import DriveImage from '../../components/ui/DriveImage';
+import { formatPortalDate, isEventPast, parsePortalDate } from '../../utils/portalDate';
 
 const QUICK_LINKS = [
   { label: 'Mark attendance', detail: 'Check in to your Talentino session', path: '/dashboard/talentino', icon: 'ph-user-check', color: '#10b981' },
@@ -12,43 +13,31 @@ const QUICK_LINKS = [
   { label: 'Contact', detail: 'Reach your placement officer', path: '/dashboard/help#contact-tpo', icon: 'ph-address-book', color: '#f59e0b' },
 ];
 
-const parseDate = (value) => {
-  if (!value || String(value).toUpperCase() === 'TBA') return null;
-  const text = String(value).replace(/,/g, '').replace(/\s+/g, ' ').trim();
-  const parts = text.split(/[-/]/);
-  if (parts.length === 3) {
-    const date = parts[0].length === 4
-      ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
-      : new Date(Number(parts[2]), Number(parts[0]) - 1, Number(parts[1]));
-    const year = Number(parts[0].length === 4 ? parts[0] : parts[2]);
-    const month = Number(parts[0].length === 4 ? parts[1] : parts[0]);
-    const day = Number(parts[0].length === 4 ? parts[2] : parts[1]);
-    if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) return date;
-  }
-  const date = new Date(text);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
 const showDate = (event) => {
-  const date = parseDate(event.date || event['Date of the Event']);
-  return date ? date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Date to be announced';
+  return formatPortalDate(event.date || event['Date of the Event']) || 'Date to be announced';
 };
 
 const indiaDateKey = (date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
 
 export default function DashboardHome() {
   const { user, dashboardData } = useOutletContext();
+  const [clockNow, setClockNow] = useState(() => new Date());
   const [gamepalStats, setGamepalStats] = useState(null);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(new Date()), 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const stats = dashboardData?.stats || {};
   const firstName = (user?.name || 'Student').trim().split(/\s+/)[0];
   const hasPhoto = user?.photo && user.photo !== 'N/A';
   const attended = Number(stats.attended) || 0;
   const currentDate = new Date();
-  const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
   const todayKey = indiaDateKey(currentDate);
   const upcomingEvents = (dashboardData?.events || [])
-    .map((event) => ({ ...event, parsedDate: parseDate(event.date || event['Date of the Event']) }))
-    .filter((event) => !event.parsedDate || event.parsedDate >= today)
+    .map((event) => ({ ...event, parsedDate: parsePortalDate(event.date || event['Date of the Event']) }))
+    .filter((event) => !event.parsedDate || !isEventPast(event.date || event['Date of the Event'], event.time || event['Time of the Event'], clockNow))
     .sort((a, b) => {
       if (!a.parsedDate) return 1;
       if (!b.parsedDate) return -1;
@@ -96,7 +85,7 @@ export default function DashboardHome() {
     <div className="dashboard-home animate-fade-in">
       <section className="dashboard-welcome-card">
         <div className="dashboard-welcome-copy">
-          <p className="eyebrow">{new Intl.DateTimeFormat('en-IN', { weekday: 'long', month: 'long', day: 'numeric' }).format(currentDate)}</p>
+          <p className="eyebrow">{formatPortalDate(currentDate)}</p>
           <h1>Welcome back, <span>{firstName}</span></h1>
           <p>Your classes, placement journey, and student resources are all in one place.</p>
           <div className="welcome-actions">

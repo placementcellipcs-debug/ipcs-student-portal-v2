@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import { formatPortalDate, formatPortalDateTime } from '../../utils/portalDate';
 
 const formatDate = (value) => {
   if (!value) return 'Date not available';
-  const normalized = String(value).trim();
-  const iso = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  const date = iso ? new Date(`${iso[1]}-${iso[2]}-${iso[3]}T12:00:00`) : new Date(normalized);
-  return Number.isNaN(date.getTime()) ? normalized : date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatPortalDate(value) || String(value).trim();
 };
 
 export default function StudentDiary() {
@@ -134,7 +132,7 @@ export default function StudentDiary() {
           <div className="panel-heading panel-heading-with-link"><div className="panel-heading-main"><span className="panel-heading-icon"><i className="ph ph-calendar-check" aria-hidden="true"></i></span><div><h2>Attendance history</h2><p>{attendance.length} class {attendance.length === 1 ? 'day' : 'days'} recorded</p></div></div></div>
           {attendance.length ? (
             <div className="diary-attendance-list">{attendance.slice(0, 30).map((record, index) => (
-              <article className="diary-attendance-row" key={`${record.date}-${record.timestamp}-${index}`}><span className="diary-attendance-check"><i className="ph-fill ph-check" aria-hidden="true"></i></span><div><strong>{formatDate(record.date)}</strong><span>{record.timestamp || 'Attendance recorded'}</span></div><span className="diary-present-pill">{record.status}</span></article>
+              <article className="diary-attendance-row" key={`${record.date}-${record.timestamp}-${index}`}><span className="diary-attendance-check"><i className="ph-fill ph-check" aria-hidden="true"></i></span><div><strong>{formatDate(record.date)}</strong><span>{formatPortalDateTime(record.timestamp) || 'Attendance recorded'}</span></div><span className="diary-present-pill">{record.status}</span></article>
             ))}</div>
           ) : <div className="empty-panel-message"><i className="ph ph-calendar-blank" aria-hidden="true"></i><strong>No class attendance yet</strong><span>Your branch check-ins will be listed here.</span></div>}
         </section>

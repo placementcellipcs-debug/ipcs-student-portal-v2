@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import ModalPortal from '../../components/ui/ModalPortal';
+import { formatPortalDateTime } from '../../utils/portalDate';
 
 export default function AssessmentCenter() {
   const { user } = useOutletContext();
@@ -335,7 +336,7 @@ export default function AssessmentCenter() {
              
              <div style={{ fontSize: '5rem', marginBottom: '15px' }}>📝</div>
              <h2 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '2rem', fontWeight: 900 }}>{viewingResult.levelReached}</h2>
-             <div style={{ fontSize: '0.95rem', color: 'var(--text-muted)', marginBottom: '25px', fontWeight: 600 }}>{viewingResult.date}</div>
+             <div style={{ fontSize: '0.95rem', color: 'var(--text-muted)', marginBottom: '25px', fontWeight: 600 }}>{formatPortalDateTime(viewingResult.date) || viewingResult.date}</div>
              
              <div style={{ background: 'var(--input-bg)', padding: '20px', borderRadius: '16px', border: '1px solid var(--input-border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', textAlign: 'left', marginBottom: '25px' }}>
                 <div><strong style={{ display:'block', fontSize:'0.75rem', color:'var(--text-muted)', textTransform:'uppercase', marginBottom: '4px' }}>Score</strong><span style={{ fontSize:'1.4rem', fontWeight:900, color:'#fff' }}>{viewingResult.score}</span></div>

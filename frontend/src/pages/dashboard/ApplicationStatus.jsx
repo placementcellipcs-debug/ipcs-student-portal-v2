@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import { formatPortalDateTime } from '../../utils/portalDate';
 
 const getStatusGroup = (status = '') => {
   const value = String(status).toLowerCase();
@@ -105,7 +106,7 @@ export default function ApplicationStatus() {
                   <div className="job-tracker-company-icon"><i className="ph-fill ph-buildings"></i></div>
                   <div className="job-tracker-card-main">
                     <div className="job-tracker-card-title"><div><h3>{position}</h3><p>{company}</p></div><span className={`job-tracker-status ${group.toLowerCase()}`}><i className={`ph ${group === 'Rejected' ? 'ph-x-circle' : group === 'Offer' ? 'ph-check-circle' : group === 'Processing' ? 'ph-hourglass-medium' : 'ph-paper-plane-tilt'}`}></i>{status}</span></div>
-                    <div className="job-tracker-card-meta"><span><i className="ph ph-hash"></i>{jobId}</span><span><i className="ph ph-calendar-blank"></i>{date}</span></div>
+                    <div className="job-tracker-card-meta"><span><i className="ph ph-hash"></i>{jobId}</span><span><i className="ph ph-calendar-blank"></i>{formatPortalDateTime(date) || date}</span></div>
                     <p className="job-tracker-remarks"><strong>Update</strong>{remarks}</p>
                   </div>
                 </article>

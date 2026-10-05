@@ -3,24 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../../components/ui/DriveImage';
 import ModalPortal from '../../components/ui/ModalPortal';
-
-const parseSafeDate = (dateStr) => {
-  if (!dateStr || dateStr === "N/A" || dateStr === "undefined" || String(dateStr).toUpperCase() === "TBA") return null;
-  let cleanStr = String(dateStr).replace(/,/g, '').replace(/\s+/g, ' ').trim();
-  const parts = cleanStr.match(/^(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})$/);
-  if (parts) {
-      const [, first, second, third] = parts;
-      const yearFirst = first.length === 4;
-      const year = Number(yearFirst ? first : third);
-      const month = Number(yearFirst ? second : first);
-      const day = Number(yearFirst ? third : second);
-      const parsedDate = new Date(year, month - 1, day);
-      if (parsedDate.getFullYear() === year && parsedDate.getMonth() === month - 1 && parsedDate.getDate() === day) return parsedDate;
-  }
-  const parsedDate = new Date(cleanStr);
-  if (!isNaN(parsedDate.getTime())) return parsedDate;
-  return null;
-};
+import { formatPortalDate, isEventPast, parsePortalDate } from '../../utils/portalDate';
 
 export default function EventsAndDrives() {
   const { user } = useOutletContext();
@@ -28,6 +11,7 @@ export default function EventsAndDrives() {
   const [loading, setLoading] = useState(() => Boolean(user?.email));
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [clockNow, setClockNow] = useState(() => new Date());
   
   // Modal & RSVP States
   const [eventModal, setEventModal] = useState(null);
@@ -36,6 +20,11 @@ export default function EventsAndDrives() {
   // Calendar Engine States
   const [calDate, setCalDate] = useState(new Date());
   const [view, setView] = useState('calendar');
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(new Date()), 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!user?.email) return undefined;
@@ -101,9 +90,12 @@ export default function EventsAndDrives() {
   
   const prevMonth = () => setCalDate(new Date(calYear, calMonth - 1, 1));
   const nextMonth = () => setCalDate(new Date(calYear, calMonth + 1, 1));
-  const upcomingEvents = data.events.map((event) => ({ ...event, parsedDate: parseSafeDate(event.date || event['Date of the Event']) }))
-    .filter((event) => !event.parsedDate || event.parsedDate >= new Date(new Date().setHours(0, 0, 0, 0)))
+  const upcomingEvents = data.events.map((event) => ({ ...event, parsedDate: parsePortalDate(event.date || event['Date of the Event']) }))
+    .filter((event) => !event.parsedDate || !isEventPast(event.date || event['Date of the Event'], event.time || event['Time of the Event'], clockNow))
     .sort((a, b) => !a.parsedDate ? 1 : !b.parsedDate ? -1 : a.parsedDate - b.parsedDate);
+  const eventModalIsPast = eventModal
+    ? isEventPast(eventModal.date || eventModal['Date of the Event'], eventModal.time || eventModal['Time of the Event'], clockNow)
+    : false;
 
   if (loading) return <div style={{ textAlign: 'center', padding: '5rem', color: '#38bdf8' }}><i className="ph ph-spinner animate-spin" style={{ fontSize: '3rem' }}></i></div>;
 
@@ -167,7 +159,7 @@ export default function EventsAndDrives() {
               {blanks.map(b => <div key={`blank-${b}`} className="cal-day-cell" style={{opacity: 0.1}}></div>)}
               {days.map(d => {
                   const dayEvents = (data.events || []).filter(ev => {
-                      const ed = parseSafeDate(ev.date || ev['Date of the Event']); 
+                      const ed = parsePortalDate(ev.date || ev['Date of the Event']); 
                       if(!ed) return false; 
                       return ed.getDate() === d && ed.getMonth() === calMonth && ed.getFullYear() === calYear;
                   });
@@ -199,7 +191,7 @@ export default function EventsAndDrives() {
       </div> : <section className="upcoming-events-list" aria-label="Upcoming events">
         {upcomingEvents.length ? upcomingEvents.map((event, index) => (
           <button type="button" className="upcoming-event-card" key={event.id || event['Drive ID'] || `${event.title}-${index}`} onClick={() => { setEventModal(event); setRsvpStatus(null); }}>
-            <span className="upcoming-event-date-label">{event.parsedDate ? event.parsedDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Date to be announced'}</span>
+            <span className="upcoming-event-date-label">{formatPortalDate(event.date || event['Date of the Event']) || 'Date to be announced'}</span>
             <strong>{event.title || event.Title || 'IPCS event'}</strong>
             <span>{event.type || event.Event || 'General event'}{(event.time || event['Time of the Event']) ? ` · ${event.time || event['Time of the Event']}` : ''}</span>
             <span>{event.location || event['Event Hapening in'] || 'Location to be announced'} <i className="ph ph-arrow-up-right"></i></span>
@@ -223,31 +215,21 @@ export default function EventsAndDrives() {
               </div>
 
               <div className="event-modal-body">
-                  {(eventModal.posterLink || eventModal['Poster Link']) && <DriveImage className="event-modal-poster" src={eventModal.posterLink || eventModal['Poster Link']} alt={`${eventModal.title || eventModal.Title} poster`} />}
+                  {!eventModalIsPast && (eventModal.posterLink || eventModal['Poster Link']) && <DriveImage className="event-modal-poster" src={eventModal.posterLink || eventModal['Poster Link']} alt={`${eventModal.title || eventModal.Title} poster`} />}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', background: 'var(--input-bg)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--input-border)', marginBottom: '1.5rem' }}>
-                      <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Date</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{eventModal.date || eventModal['Date of the Event']}</span></div>
+                      <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Date</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{formatPortalDate(eventModal.date || eventModal['Date of the Event']) || eventModal.date || eventModal['Date of the Event'] || 'TBA'}</span></div>
                       <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Time</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{eventModal.time || eventModal['Time of the Event'] || 'TBA'}</span></div>
                       <div style={{ gridColumn: '1 / -1' }}><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Location</strong><span style={{ color: '#38bdf8', fontWeight: 700, fontSize: '1rem' }}>{eventModal.location || eventModal['Event Hapening in'] || 'TBA'}</span></div>
                   </div>
                   
-                  {eventModal.description && (
-                      <div style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '2rem' }}>
+                  {(eventModal.description || eventModal.Description) && (
+                      <div style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '2rem', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
                           {eventModal.description || eventModal.Description}
                       </div>
                   )}
 
                   {(() => {
-                      let isPast = false;
-                      const dString = eventModal.date || eventModal['Date of the Event'];
-                      if (dString && dString.toLowerCase() !== 'tba') {
-                          const eventDate = parseSafeDate(dString);
-                          if (eventDate && !isNaN(eventDate.getTime())) {
-                              eventDate.setHours(0,0,0,0);
-                              const today = new Date();
-                              today.setHours(0,0,0,0);
-                              isPast = eventDate < today;
-                          }
-                      }
+                      const isPast = eventModalIsPast;
                       
                       const driveId = eventModal.id || eventModal.title || eventModal['Drive ID'];
                       const userRSVP = data.driveRSVPs?.find(r => r.driveId === driveId);

@@ -559,7 +559,7 @@ body[data-theme="dark"] .alert-info { color: #7dd3fc; }
 .drive-reminder-icon { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; background: color-mix(in srgb, var(--accent-cyan) 16%, transparent); color: var(--accent-cyan); font-size: 1.6rem; }
 .drive-reminder-card h2 { margin: 0 0 8px; color: var(--text-main); font-size: 1.5rem; }
 .drive-reminder-meta { color: var(--accent-cyan); font-size: 0.82rem; font-weight: 700; }
-.drive-reminder-description { color: var(--text-muted); line-height: 1.6; }
+.drive-reminder-description { color: var(--text-muted); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .drive-reminder-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
 .drive-reminder-actions button { flex: 1 1 140px; }
 

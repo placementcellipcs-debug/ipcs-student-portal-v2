@@ -4,6 +4,7 @@ import api from '../../config/axios';
 import DriveImage from '../ui/DriveImage';
 import ModalPortal from '../ui/ModalPortal';
 import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
+import { formatPortalDate, isEventPast } from '../../utils/portalDate';
 
 const COVER_BANNER_URL = 'https://lh3.googleusercontent.com/d/1eiP135HOsuG3MEaEplNblmcLewjnKXp6';
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -26,28 +27,10 @@ const photoCacheVersion = (photoUrl) => {
   }
 };
 
-const parseEventDate = (value) => {
-  if (!value || String(value).toUpperCase() === 'TBA') return null;
-  const text = String(value).replace(/,/g, '').replace(/\s+/g, ' ').trim();
-  const parts = text.match(/^(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})$/);
-  if (parts) {
-    const [, first, second, third] = parts;
-    const yearFirst = first.length === 4;
-    const year = Number(yearFirst ? first : third);
-    const month = Number(yearFirst ? second : first);
-    const day = Number(yearFirst ? third : second);
-    const date = new Date(year, month - 1, day);
-    if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) return date;
-  }
-  const date = new Date(text);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
 const eventKey = (event) => String(event.id || event['Drive ID'] || event.driveId || `${event.title || event.Title || 'event'}-${event.date || event['Date of the Event'] || ''}`);
 const eventTitle = (event) => event.title || event.Title || 'Upcoming IPCS event';
 const eventDateLabel = (event) => {
-  const date = parseEventDate(event.date || event['Date of the Event']);
-  return date ? date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date to be announced';
+  return formatPortalDate(event.date || event['Date of the Event']) || 'Date to be announced';
 };
 
 const NAV_GROUPS = [
@@ -97,6 +80,7 @@ export default function DashboardLayout() {
   ));
   const [drivePopup, setDrivePopup] = useState(null);
   const [driveActionStatus, setDriveActionStatus] = useState(null);
+  const [clockNow, setClockNow] = useState(() => new Date());
   const isIOS = typeof navigator !== 'undefined' && (
     /iPad|iPhone|iPod/.test(navigator.userAgent)
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
@@ -112,6 +96,11 @@ export default function DashboardLayout() {
   useEffect(() => {
     if (!user?.email) navigate('/', { replace: true });
   }, [navigate, user?.email]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
@@ -227,10 +216,8 @@ export default function DashboardLayout() {
     });
     const eventUpdates = (dashboardData?.events || []).map((event, index) => ({ event, index }))
       .filter(({ event }) => {
-        const date = parseEventDate(event.date || event['Date of the Event']);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return date && date >= today;
+        const date = event.date || event['Date of the Event'];
+        return date && !isEventPast(date, event.time || event['Time of the Event'], clockNow);
       })
       .map(({ event, index }) => ({
         id: `ev-${index}-${eventTitle(event)}`,
@@ -243,7 +230,7 @@ export default function DashboardLayout() {
 
     return [...applicationUpdates, ...eventUpdates]
       .sort((a, b) => Number(readNotifications.includes(a.id)) - Number(readNotifications.includes(b.id)));
-  }, [dashboardData?.appliedJobs, dashboardData?.events, readNotifications]);
+  }, [dashboardData?.appliedJobs, dashboardData?.events, readNotifications, clockNow]);
   const unreadCount = notifications.filter((item) => !readNotifications.includes(item.id)).length;
 
   useEffect(() => {
@@ -297,7 +284,7 @@ export default function DashboardLayout() {
         });
         if (nextDrive) {
           window.setTimeout(() => {
-            if (!cancelled) {
+            if (!cancelled && !isEventPast(nextDrive.date || nextDrive['Date of the Event'], nextDrive.time || nextDrive['Time of the Event'])) {
               setDrivePopup((previous) => previous || nextDrive);
               setDriveActionStatus(null);
             }
@@ -319,6 +306,19 @@ export default function DashboardLayout() {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [drivePopup, user?.email]);
+
+  useEffect(() => {
+    if (!drivePopup) return undefined;
+    const dismissExpiredDrive = () => {
+      if (isEventPast(drivePopup.date || drivePopup['Date of the Event'], drivePopup.time || drivePopup['Time of the Event'])) {
+        setDrivePopup(null);
+        setDriveActionStatus(null);
+      }
+    };
+    dismissExpiredDrive();
+    const timer = window.setInterval(dismissExpiredDrive, 1000);
+    return () => window.clearInterval(timer);
+  }, [drivePopup]);
 
   const toggleTheme = () => setTheme((previous) => previous === 'dark' ? 'light' : 'dark');
   const handleLogout = () => {

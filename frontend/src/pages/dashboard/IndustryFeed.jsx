@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../config/axios';
 import ModalPortal from '../../components/ui/ModalPortal';
+import { formatPortalDate } from '../../utils/portalDate';
 
 const DEFAULT_TOPICS = [
   { id: 'all', label: 'For you' },
@@ -16,9 +17,7 @@ const DEFAULT_TOPICS = [
 
 const formatDate = (date) => {
   if (!date) return 'Recent update';
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return 'Recent update';
-  return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(parsed);
+  return formatPortalDate(date) || 'Recent update';
 };
 
 export default function IndustryFeed() {

@@ -270,7 +270,7 @@ export default function Signup() {
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Joining Date *</label>
-                <input type="date" name="joiningDate" onChange={handleChange} required />
+                <input type="date" lang="en-GB" name="joiningDate" onChange={handleChange} required />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label>Qualification *</label>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
+import { formatPortalDate } from '../../utils/portalDate';
 
 export default function TalentinoAttendance() {
   const { user } = useOutletContext();
@@ -199,15 +200,7 @@ export default function TalentinoAttendance() {
            <div style={{ textAlign: 'center', color: '#64748b', padding: '3rem', background: 'var(--card-bg)', borderRadius: '20px', border: '1px dashed var(--input-border)', fontWeight: 600 }}>No encrypted audit logs found.</div>
          ) : (
            (data.attendanceHistory || []).map((hist, idx) => {
-              // Same parsing logic as your old code
-              let parsedDate = hist.dateStr || "Unknown";
-              const rawDate = String(hist.dateStr || '');
-              let safeD = new Date(rawDate.replace(/,/g, '').replace(/\s+/g, ' ').trim());
-              if (isNaN(safeD.getTime())) {
-                 const parts = rawDate.split(/[-/]/);
-                 if (parts.length === 3) safeD = new Date(parts[2], parts[1] - 1, parts[0]);
-              }
-              if (!isNaN(safeD.getTime())) parsedDate = safeD.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+              const parsedDate = formatPortalDate(hist.dateStr) || hist.dateStr || 'Unknown';
 
               const rawTimestamp = String(hist.timestamp || '');
               const timeMatch = rawTimestamp.match(/\d{1,2}:\d{2}:\d{2}\s?(AM|PM|am|pm)/);

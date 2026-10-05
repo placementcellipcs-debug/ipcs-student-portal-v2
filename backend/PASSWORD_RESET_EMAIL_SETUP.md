@@ -38,11 +38,12 @@ Open the backend web service in Render, then **Environment → Add Environment V
 
 | Name | Value |
 |---|---|
+| `RESET_PASSWORD_BASE_URL` | `https://ipcstalenzo.com` |
 | `APPS_SCRIPT_MAIL_URL` | The first Apps Script `/exec` URL |
 | `APPS_SCRIPT_MAIL_FALLBACK_URL` | Optional second `/exec` URL |
 | `APPS_SCRIPT_MAIL_SECRET` | The exact same random value used for `RESET_MAIL_SHARED_SECRET` |
 
-Save changes and redeploy the backend. Keep the secret in Render's backend environment only. The frontend/Vercel does not need it.
+Save changes and redeploy the backend. Reset links will point to `https://ipcstalenzo.com/reset-password`, the portal's public frontend. Keep the mail secret in Render's backend environment only. The frontend/Vercel does not need it.
 
 ## Part 4: configure Nodemailer backup
 

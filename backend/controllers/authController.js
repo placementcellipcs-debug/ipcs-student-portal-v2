@@ -94,16 +94,19 @@ const sendResetEmailThroughAppsScript = async ({ recipient, name, emailContent, 
     for (let index = 0; index < endpointUrls.length; index += 1) {
         try {
             const response = await axios.post(endpointUrls[index], payload, {
-                timeout: 12000,
+                timeout: 30000,
                 maxRedirects: 5,
                 headers: { 'Content-Type': 'application/json' },
             });
             if (response.data?.success === true) return response.data;
-            throw new Error(response.data?.message || 'Apps Script mail gateway rejected the request.');
+            const gatewayError = new Error(response.data?.message || 'Apps Script mail gateway rejected the request.');
+            gatewayError.gatewayCode = response.data?.code;
+            throw gatewayError;
         } catch (error) {
             lastError = error;
             console.error('Password reset Apps Script endpoint failed:', {
                 endpointNumber: index + 1,
+                gatewayCode: error.gatewayCode || error.response?.data?.code,
                 code: error.code,
                 status: error.response?.status,
                 message: error.message,

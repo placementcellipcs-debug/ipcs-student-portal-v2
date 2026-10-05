@@ -76,7 +76,7 @@ const sendResetEmailThroughAppsScript = async ({ recipient, name, emailContent, 
         throw new Error('Apps Script mail gateway is not configured.');
     }
 
-    const payload = {
+    const signedFields = {
         version: 1,
         requestId: crypto.randomUUID(),
         timestamp: Date.now(),
@@ -87,8 +87,21 @@ const sendResetEmailThroughAppsScript = async ({ recipient, name, emailContent, 
         html: emailContent.html,
         logoBase64: logoBase64 || '',
     };
-    const canonicalPayload = JSON.stringify(payload);
-    payload.signature = crypto.createHmac('sha256', sharedSecret).update(canonicalPayload).digest('base64');
+    const canonicalPayload = JSON.stringify({
+        version: signedFields.version,
+        requestId: signedFields.requestId,
+        timestamp: signedFields.timestamp,
+        to: signedFields.to,
+        name: signedFields.name,
+        subject: signedFields.subject,
+        text: signedFields.text,
+        html: signedFields.html,
+        logoBase64: signedFields.logoBase64 || '',
+    });
+    const payload = {
+        ...signedFields,
+        signature: crypto.createHmac('sha256', sharedSecret).update(canonicalPayload, 'utf8').digest('base64'),
+    };
 
     let lastError = null;
     for (let index = 0; index < endpointUrls.length; index += 1) {

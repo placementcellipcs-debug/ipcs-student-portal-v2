@@ -19,7 +19,7 @@ function doPost(event) {
     }
 
     var payload = JSON.parse(event.postData.contents);
-    var secret = PropertiesService.getScriptProperties().getProperty('RESET_MAIL_SHARED_SECRET');
+    var secret = String(PropertiesService.getScriptProperties().getProperty('RESET_MAIL_SHARED_SECRET') || '').trim();
     if (!secret) {
       return jsonOutput_({ success: false, code: 'MISSING_SECRET', message: 'Mailer secret is not configured.' });
     }
@@ -42,7 +42,7 @@ function doPost(event) {
       logoBase64: payload.logoBase64 || '',
     });
     var expectedSignature = Utilities.base64Encode(
-      Utilities.computeHmacSha256Signature(canonical, secret)
+      Utilities.computeHmacSha256Signature(canonical, secret, Utilities.Charset.UTF_8)
     );
     if (!constantTimeEquals_(expectedSignature, String(payload.signature || ''))) {
       return jsonOutput_({ success: false, code: 'INVALID_SIGNATURE', message: 'Request authentication failed.' });

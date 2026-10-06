@@ -2,9 +2,9 @@ const DatabaseService = require('../services/dbService');
 const connectSheet = require('../config/db');
 const axios = require('axios');
 const bcrypt = require('bcryptjs');
-const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const { pipeline } = require('node:stream/promises');
+const { createEmailTransport, getEmailFrom } = require('../services/emailTransport');
 
 // Helpers
 const buildCourseMap = async () => {
@@ -743,14 +743,14 @@ const submitDriveResponse = async (req, res) => {
 
         if (status === 'Registered' && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
             try {
-                const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS } });
+                const transporter = createEmailTransport();
                 const assignedTpo = contacts.slice(1).find((row) => branchMatches(getCol(row, 4), student.branch));
                 const ccTpoEmail = getCol(assignedTpo, 2, 'placement@ipcsglobal.com');
                 const safeName = String(student.name).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
                 const safeTitle = String(getCol(event, 4, title || 'Placement Drive')).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
                 const mailOptions = {
-                    from: '"IPCS Placement Cell" <placement@ipcsglobal.com>',
+                    from: getEmailFrom(),
                     to: student.email, cc: ccTpoEmail, subject: `Drive Registration Confirmed: ${safeTitle}`,
                     html: `<div style="font-family: Arial, sans-serif; padding: 20px;"><div style="max-width: 600px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 10px; border-top: 5px solid #38bdf8;">
                             <h2>Registration Successful! 🎉</h2>

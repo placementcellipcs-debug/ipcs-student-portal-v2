@@ -1,0 +1,9 @@
+Options -MultiViews
+DirectoryIndex index.html
+RewriteEngine On
+
+# Serve files that exist (assets, icons, downloads) as-is; route app paths to React.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+RewriteRule ^ index.html [L]

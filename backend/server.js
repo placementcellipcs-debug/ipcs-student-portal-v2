@@ -8,15 +8,14 @@ dotenv.config();
 
 const app = express();
 
-// Configure CORS for local development, Vercel testing, and production domains
+// Configure CORS for the production portal and local/native development.
 const allowedOrigins = [...new Set([
   ...(process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map((origin) => origin.trim()).filter(Boolean),
   ...(process.env.NATIVE_APP_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
   'http://localhost:5173',
   'http://localhost:3000',
   'https://ipcstalenzo.com',
-  'https://placement.ipcsglobal.info',          // Main Production Frontend
-  'https://ipcs-student-portal-v2.vercel.app',  // Vercel Testing Frontend
+  'https://ipcs-student-portal-v2.vercel.app', // Vercel test frontend uses the Render API.
   'capacitor://localhost',                     // Native Mobile Fallback
   'ionic://localhost'
 ])];

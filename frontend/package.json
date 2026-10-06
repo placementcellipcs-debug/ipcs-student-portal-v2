@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "main.cjs",
   "scripts": {
@@ -40,12 +40,12 @@
       "icon": "src-tauri/icons/icon.icns"
     },
     "files": [
-  "dist/**/*",
-  "main.cjs",
-  "splash.html",
-  "public/icons/talenzo-brand-mark.png",
-  "src-tauri/icons/icon.ico"
-]
+      "dist/**/*",
+      "main.cjs",
+      "splash.html",
+      "public/icons/talenzo-brand-mark.png",
+      "src-tauri/icons/icon.ico"
+    ]
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

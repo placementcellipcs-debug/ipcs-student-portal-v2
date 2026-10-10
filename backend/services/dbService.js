@@ -48,6 +48,7 @@ class DatabaseService {
             auth, 
             spreadsheetId: targetSpreadsheetId, 
             range, 
+            insertDataOption: 'INSERT_ROWS',
             valueInputOption: "USER_ENTERED", 
             resource: { values: [rowData] } 
         }));
@@ -62,11 +63,14 @@ class DatabaseService {
             auth,
             spreadsheetId: targetSpreadsheetId,
             range,
+            insertDataOption: 'INSERT_ROWS',
             valueInputOption: 'RAW',
             resource: { values: [rowData] },
         }));
         dbCache.flushAll();
-        return response.data.updates?.updatedRange || true;
+        const updatedRange = response.data.updates?.updatedRange;
+        if (!updatedRange) throw new Error('Google Sheets did not confirm the appended row range.');
+        return updatedRange;
     }
 
     static async ensureWorksheetWithHeaders(title, headers, targetSpreadsheetId = process.env.SPREADSHEET_ID) {

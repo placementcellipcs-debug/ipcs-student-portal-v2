@@ -8,6 +8,9 @@ import talenzoLogo from '../../assets/TALENZO111.png';
 // Import Assets
 import loadingVideo from '../../assets/video.mp4';
 
+const isTestingPortal = typeof window !== 'undefined'
+  && !['ipcstalenzo.com', 'www.ipcstalenzo.com'].includes(window.location.hostname.toLowerCase());
+
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -236,6 +239,7 @@ export default function Login() {
           ) : (
             <div className="auth-card animate-fade-in login-form-animate">
               <div className="brand-logo-container"><img src={ipcsGlobalLogo} alt="IPCS Global" className="auth-logo-img" /></div>
+              {isTestingPortal && <div className="auth-test-environment-note" role="note"><i className="ph ph-flask" aria-hidden="true"></i><span><strong>Testing portal:</strong> this site may use the Render test backend and its student sheet. Use <a href="https://ipcstalenzo.com">ipcstalenzo.com</a> for live student accounts.</span></div>}
               {!isForgotPassword ? (
                 <>
                   <h2 style={{ textAlign: 'center', margin: '0 0 6px 0', color: '#ffffff' }}>Welcome</h2>

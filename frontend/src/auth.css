@@ -42,6 +42,10 @@
 .switch-mode a { color: var(--accent-cyan); font-weight: 800; text-decoration: none; }
 .switch-mode a:hover { color: #7dd3fc; text-decoration: underline; }
 .switch-mode button, .login-forgot-row button { padding: 0; border: 0; background: transparent; color: var(--accent-cyan); font: inherit; font-weight: 800; cursor: pointer; }
+.auth-test-environment-note { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 18px; padding: 11px 13px; border: 1px solid rgba(251, 191, 36, .35); border-radius: 11px; background: rgba(245, 158, 11, .09); color: #fde68a; font-size: .78rem; line-height: 1.5; }
+.auth-test-environment-note > i { flex: 0 0 auto; margin-top: 1px; font-size: 1rem; }
+.auth-test-environment-note a { color: #bae6fd; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
+.auth-test-environment-note strong { color: #fef3c7; }
 .switch-mode button:hover, .login-forgot-row button:hover { color: #7dd3fc; text-decoration: underline; }
 .login-forgot-row { display: flex; justify-content: flex-end; margin: -4px 0 2px; font-size: .8rem; }
 .password-reset-wrapper { display: grid; place-items: center; min-height: 100svh; padding: 24px; background: radial-gradient(ellipse at 14% 20%, rgba(14,165,233,.16), transparent 40%), linear-gradient(140deg,#080c14,#0b1220 55%,#090e19); }

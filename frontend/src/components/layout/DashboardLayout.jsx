@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import api from '../../config/axios';
 import DriveImage from '../ui/DriveImage';
 import ModalPortal from '../ui/ModalPortal';
@@ -60,6 +61,13 @@ const NAV_GROUPS = [
   ] },
 ];
 
+const MOBILE_APP_TABS = [
+  { label: 'Home', path: '/dashboard', icon: 'ph-house', matches: (path) => path === '/dashboard' },
+  { label: 'Jobs', path: '/dashboard/vacancies', icon: 'ph-briefcase', matches: (path) => path.startsWith('/dashboard/vacancies') || path.startsWith('/dashboard/status') },
+  { label: 'Events', path: '/dashboard/events', icon: 'ph-calendar-blank', matches: (path) => path.startsWith('/dashboard/events') },
+  { label: 'GamePal', path: '/dashboard/gamepal', icon: 'ph-game-controller', matches: (path) => path.startsWith('/dashboard/gamepal') },
+];
+
 export default function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -85,6 +93,7 @@ export default function DashboardLayout() {
     /iPad|iPhone|iPod/.test(navigator.userAgent)
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   );
+  const isNativeApp = Capacitor.isNativePlatform();
 
   const readNotificationsKey = `talentino_read_notifications_${user?.email || 'student'}`;
   const [readNotifications, setReadNotifications] = useState(() => {
@@ -414,7 +423,7 @@ export default function DashboardLayout() {
   const initial = firstName.charAt(0).toUpperCase();
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout${isNativeApp ? ' native-app-layout' : ''}`}>
       <header className="top-header">
         <div className="header-left">
           <img src={ipcsGlobalLogo} alt="IPCS Global" className="header-logo-img" />
@@ -486,6 +495,36 @@ export default function DashboardLayout() {
           <Outlet context={{ user, setUser, theme, toggleTheme, accent, setAccent, dashboardData, canInstallApp: Boolean(installPrompt), installApp, isAppInstalled, isIOS }} />
         </div>
       </main>
+
+      {isNativeApp && (
+        <nav className="native-bottom-nav" aria-label="Primary app navigation">
+          {MOBILE_APP_TABS.map((tab) => {
+            const active = tab.matches(location.pathname);
+            return (
+              <button
+                type="button"
+                key={tab.path}
+                className={`native-bottom-nav-item${active ? ' active' : ''}`}
+                aria-current={active ? 'page' : undefined}
+                onClick={() => navigateTo(tab.path)}
+              >
+                <i className={`ph ${tab.icon}`} aria-hidden="true"></i>
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            className={`native-bottom-nav-item${MOBILE_APP_TABS.some((tab) => tab.matches(location.pathname)) ? '' : ' active'}`}
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open all sections"
+            aria-current={MOBILE_APP_TABS.some((tab) => tab.matches(location.pathname)) ? undefined : 'page'}
+          >
+            <i className="ph ph-squares-four" aria-hidden="true"></i>
+            <span>More</span>
+          </button>
+        </nav>
+      )}
 
       {drivePopup && (
         <ModalPortal>

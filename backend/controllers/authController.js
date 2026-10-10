@@ -29,6 +29,23 @@ const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[character]));
 
+const getIndiaRegistrationTimestamp = (date = new Date()) => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+    }).formatToParts(date).reduce((result, part) => {
+        if (part.type !== 'literal') result[part.type] = part.value;
+        return result;
+    }, {});
+    return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}:${parts.second} IST`;
+};
+
 const findStudentByEmail = (rows, email) => {
     const wanted = String(email || '').trim().toLowerCase();
     for (let index = (rows || []).length - 1; index >= 1; index--) {
@@ -218,23 +235,30 @@ const resetPassword = async (req, res) => {
 
 const loginUser = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const email = String(req.body?.email || '').trim().toLowerCase();
+        const password = String(req.body?.password || '');
         if (!email || !password) return res.status(400).json({ success: false, message: "Email and password are required." });
+        if (!process.env.SPREADSHEET_ID || !process.env.JWT_SECRET) {
+            console.error('[auth/login] SPREADSHEET_ID or JWT_SECRET is not configured.');
+            return res.status(503).json({ success: false, message: 'Student login is temporarily unavailable. Please contact IPCS support.' });
+        }
 
-        // Fetch data using our new Database Service
+        // Always read current records so new registrations and admin changes are visible immediately.
         const rows = await DatabaseService.getSheetData('Data!A:AG', process.env.SPREADSHEET_ID, 0);
         let userObj = null;
+        let emailExists = false;
 
         for (let i = rows.length - 1; i > 0; i--) {
-            const row = rows[i];
-            if (row[3] && row[3].toString().trim().toLowerCase() === email.toString().trim().toLowerCase()) {
+            const row = rows[i] || [];
+            if (String(row[3] || '').trim().toLowerCase() === email) {
+                emailExists = true;
                 let isMatch = false;
                 
                 // Check password (supports both plain text for old data and bcrypt for new data)
-                if (row[4] === password) {
+                if (String(row[4] || '') === password) {
                     isMatch = true;
                 } else { 
-                    try { isMatch = await bcrypt.compare(password, row[4]); } catch(e) {} 
+                    try { isMatch = await bcrypt.compare(password, String(row[4] || '')); } catch(e) {} 
                 }
 
                 if (isMatch) {
@@ -254,7 +278,13 @@ const loginUser = async (req, res) => {
             }
         }
 
-        if (!userObj) return res.status(404).json({ success: false, message: "Account not found or incorrect password." });
+        if (!userObj) {
+            return res.status(emailExists ? 401 : 404).json({
+                success: false,
+                code: emailExists ? 'INVALID_CREDENTIALS' : 'ACCOUNT_NOT_FOUND',
+                message: emailExists ? 'The email or password is incorrect.' : 'No student account was found for this email. Contact IPCS support if you have already registered.',
+            });
+        }
         
         const sessionVersion = await AuthSessionService.getSessionVersion(userObj.email, 0);
         const token = jwt.sign(
@@ -269,18 +299,25 @@ const loginUser = async (req, res) => {
             status: error?.response?.status || null,
             message: error?.message || 'Unknown login error',
         });
-        return res.status(500).json({ success: false, message: "Server error during login." }); 
+        return res.status(503).json({ success: false, code: 'STUDENT_RECORDS_UNAVAILABLE', message: 'We could not reach the student records right now. Please try again shortly.' }); 
     }
 };
 
 const registerUser = async (req, res) => {
     try {
-        const formData = req.body;
-        if (!formData?.email || !formData?.password) return res.status(400).json({ success: false, message: "Email and password are required." });
+        const formData = req.body || {};
+        const cleanEmail = String(formData.email || '').trim().toLowerCase();
+        if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || !formData.password) {
+            return res.status(400).json({ success: false, message: 'Enter a valid email address and password.' });
+        }
+        if (!process.env.SPREADSHEET_ID || !process.env.JWT_SECRET) {
+            console.error('[auth/register] SPREADSHEET_ID or JWT_SECRET is not configured.');
+            return res.status(503).json({ success: false, message: 'Registration is temporarily unavailable. Please contact IPCS support.' });
+        }
 
-        const rows = await DatabaseService.getSheetData("Data!A:AG");
+        // Do not use the normal 10-minute sheet cache for account creation.
+        const rows = await DatabaseService.getSheetData('Data!A:AG', process.env.SPREADSHEET_ID, 0);
         const headers = rows[0] || [];
-        const cleanEmail = formData.email.toString().trim().toLowerCase();
 
         // Check if user already exists
         for (let i = rows.length - 1; i >= 1; i--) {
@@ -315,8 +352,9 @@ const registerUser = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(formData.password, salt);
 
+        const token = jwt.sign({ email: cleanEmail, rollNo: formData.rollNo || "N/A", branch: formData.branch || "Bangalore", sv: '0' }, process.env.JWT_SECRET, { expiresIn: '7d' });
         const newRow = [
-            new Date().toLocaleString('en-GB'), String(formData.name || "N/A"), String(formData.phone || "N/A"), String(formData.email || "").trim(),           
+            getIndiaRegistrationTimestamp(), String(formData.name || "N/A"), String(formData.phone || "N/A"), cleanEmail,           
             String(hashedPassword), String(formData.rollNo || "N/A"), String(formData.joiningDate || "N/A"), String(formData.course || "N/A"),              
             String(formData.branch || "Bangalore"), String(photoUrl || ""), String(formData.homeTown || "N/A"), String(formData.qualification || "N/A"),       
             String(formData.stream || "N/A"), String(formData.fresherStatus || "N/A"), String(formData.linkedin || "N/A"), String(formData.instagram || "N/A"),           
@@ -326,14 +364,27 @@ const registerUser = async (req, res) => {
         ];
 
         // Append to Database
-        await DatabaseService.appendRow("Data!A:AG", newRow);
+        const updatedRange = await DatabaseService.appendRowRaw('Data!A:AG', newRow, process.env.SPREADSHEET_ID);
+        const appendedRowNumber = Number(String(updatedRange).match(/!A(\d+):/i)?.[1]);
+        if (!Number.isInteger(appendedRowNumber) || appendedRowNumber < 2) {
+            throw new Error(`Google Sheets returned an unexpected registration range: ${updatedRange}`);
+        }
+        const savedRows = await DatabaseService.getSheetData(`Data!A${appendedRowNumber}:AG${appendedRowNumber}`, process.env.SPREADSHEET_ID, 0);
+        const savedRow = savedRows[0] || [];
+        if (String(savedRow[3] || '').trim().toLowerCase() !== cleanEmail || !String(savedRow[4] || '').startsWith('$2')) {
+            throw new Error(`Registration row verification failed at ${updatedRange}.`);
+        }
 
-        const token = jwt.sign({ email: formData.email, rollNo: formData.rollNo || "N/A", branch: formData.branch || "Bangalore", sv: '0' }, process.env.JWT_SECRET, { expiresIn: '7d' });
-        const userObj = { name: formData.name || "Student", email: formData.email, rollNo: formData.rollNo || "N/A", branch: formData.branch || "Bangalore", course: formData.course || "N/A", photo: photoUrl || "", vacancyOpen: "" };
+        const userObj = { name: formData.name || "Student", email: cleanEmail, rollNo: formData.rollNo || "N/A", branch: formData.branch || "Bangalore", course: formData.course || "N/A", photo: photoUrl || "", vacancyOpen: "" };
 
-        return res.status(200).json({ success: true, message: "Account created!", token, userObj });
+        return res.status(201).json({ success: true, message: "Account created and saved!", token, userObj });
     } catch (error) { 
-        return res.status(500).json({ success: false, message: error.message || "Server error during registration." }); 
+        console.error('[auth/register] Registration failed:', {
+            code: error?.code || null,
+            status: error?.response?.status || null,
+            message: error?.message || 'Unknown registration error',
+        });
+        return res.status(503).json({ success: false, code: 'REGISTRATION_SAVE_FAILED', message: 'We could not confirm that the account was saved. Please contact IPCS support before trying again.' }); 
     }
 };
 

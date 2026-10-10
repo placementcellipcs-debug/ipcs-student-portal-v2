@@ -5,6 +5,9 @@ import api from '../../config/axios';
 import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
 import ModalPortal from '../../components/ui/ModalPortal';
 
+const isTestingPortal = typeof window !== 'undefined'
+  && !['ipcstalenzo.com', 'www.ipcstalenzo.com'].includes(window.location.hostname.toLowerCase());
+
 
 const sanitizePhoneNumber = (val) => {
   if (!val) return '';
@@ -168,6 +171,7 @@ export default function Signup() {
   return (
     <div className="auth-wrapper" style={{ background: '#0b0f17' }}>
       <div className="profile-reg-card">
+        {isTestingPortal && <div className="auth-test-environment-note" role="note"><i className="ph ph-flask" aria-hidden="true"></i><span><strong>Testing portal:</strong> this site may use the Render test backend and its student sheet. Use <a href="https://ipcstalenzo.com">ipcstalenzo.com</a> for live student accounts.</span></div>}
         <div className="reg-header">
           <div>
               <h2 style={{ margin: '0 0 4px 0' }}>Create Student Profile</h2>

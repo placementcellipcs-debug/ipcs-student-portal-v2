@@ -44,7 +44,7 @@ body[data-theme="dark"][data-accent="orange"] { --accent-cyan: #fb923c; --accent
 body[data-theme="light"][data-accent="orange"] { --accent-cyan: #c2410c; --accent-blue: #c2410c; }
 
 * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; }
-body { background-color: var(--bg-dark); color: var(--text-main); margin: 0; padding: 0; min-height: 100vh; overflow-x: hidden; transition: background-color 0.3s, color 0.3s; }
+body { background-color: var(--bg-dark); color: var(--text-main); margin: 0; padding: 0; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; transition: background-color 0.3s, color 0.3s; }
 .hidden { display: none !important; }
 
 ::-webkit-scrollbar { width: 8px; }
@@ -67,8 +67,9 @@ body[data-theme="dark"] .alert-warning { color: #fcd34d; }
 body[data-theme="dark"] .alert-info { color: #7dd3fc; }
 
 /* Dashboard Layout Shell */
-.app-layout { display: flex; flex-direction: column; width: 100vw; min-height: 100vh; }
+.app-layout { display: flex; flex-direction: column; width: 100vw; min-height: 100vh; min-height: 100dvh; }
 .main-body { flex: 1; display: flex; flex-direction: column; width: 100%; }
+.native-bottom-nav { display: none; }
 .top-header { height: 65px; border-bottom: 1px solid var(--card-border); background: var(--card-bg); display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; z-index: 50; }
 .header-logo-img { height: 32px; object-fit: contain; }
 .header-right { display: flex; align-items: center; gap: 15px; }
@@ -615,6 +616,16 @@ body[data-theme="dark"] .alert-info { color: #7dd3fc; }
   .drive-reminder-actions { display: grid; grid-template-columns: 1fr; }
   .contact-details > div { grid-template-columns: 85px minmax(0, 1fr); }
 }
+
+/* Capacitor Android/iOS: use an app navigation bar and respect screen cutouts. */
+.native-app-layout { min-height: 100dvh; padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+.native-app-layout .top-header { height: calc(58px + env(safe-area-inset-top, 0px)); padding-top: env(safe-area-inset-top, 0px); }
+.native-app-layout .portal-back-dashboard { display: none; }
+.native-app-layout .native-bottom-nav { position: fixed; z-index: 80; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 7px 8px calc(7px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--card-border); background: color-mix(in srgb, var(--card-bg) 94%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.native-bottom-nav-item { min-width: 0; min-height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 5px 2px; border: 0; border-radius: 12px; color: var(--text-muted); background: transparent; font-size: .65rem; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.native-bottom-nav-item i { font-size: 1.25rem; line-height: 1; }
+.native-bottom-nav-item.active { color: var(--accent-cyan); background: color-mix(in srgb, var(--accent-cyan) 12%, transparent); }
+.native-app-layout .drawer-card { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 /* Career Hub */
 .career-hub-page { width: min(100%, 1280px); margin: 0 auto; }

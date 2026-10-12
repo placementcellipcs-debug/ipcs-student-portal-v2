@@ -4,6 +4,20 @@ const GAME_ART = {
   knifeshow: '🗡️', snowrider: '🛷', dino: '🦖', chess: '♟️', 'word-association': '🔠',
   'ludo-king': '🎲', 'snakes-ladders': '🐍', '2048': '🔢', minesweeper: '💣',
   'connect-4': '🔴', wordle: '🟩', snake: '🐍', 'flappy-bird': '🐤', 'brick-breaker': '🧱',
+  'whack-mole': '🔨', 'cookie-clicker': '🍪', 'guess-number': '🔢', 'color-flood': '🎨',
+  'memory-match': '🃏', 'tic-tac-toe': '❌', 'rock-paper-scissors': '✂️', 'dice-battle': '🎲',
+  'coin-flip-tycoon': '🪙', pong: '🏓', asteroids: '☄️', frogger: '🐸', 'space-invaders': '👾',
+  'lunar-lander': '🚀', 'bubble-shooter': '🫧', 'lights-out': '💡', 'tower-hanoi': '🗼',
+  slitherlink: '🔗', mastermind: '🧩', 'slide-puzzle': '🔢', checkers: '⚫',
+  'geometry-dash': '🔺', 'fruit-ninja': '🍉', 'stack-tower': '🧱', 'falling-blocks': '🟥',
+  'helix-jump': '🌀', 'typing-racer': '⌨️', 'quick-draw': '🎯', 'bop-it': '🕹️',
+  'piano-tiles': '🎹', 'hoop-shot': '🏀', 'hexagon-dodger': '⬡', 'word-scramble-scavenger': '🔎',
+  'balloon-pop-math': '🎈', 'tunnel-runner': '🛣️', 'orbit-golf': '🪐', 'sound-matcher': '🎵',
+  'maze-tracer': '🧭', 'rhythm-tap': '🥁', 'fruit-catcher': '🧺', 'missile-command': '🛡️',
+  'word-search': '🔤', tetris: '🧊', artillery: '🎯', parking: '🚙', pinball: '🎰',
+  'duck-hunt': '🦆', plinko: '🔽', 'tower-defense': '🏰', platformer: '🏃',
+  'boxing-reaction': '🥊', 'daily-crossword': '📝', 'zombie-survival': '🧟',
+  'burger-assembly': '🍔', 'air-hockey': '🏒', 'minecart-runner': '🚋',
 };
 
 export default function GameArtwork({ game, compact = false }) {

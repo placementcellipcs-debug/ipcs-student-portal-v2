@@ -6,13 +6,33 @@ const FRIEND_HEADERS = ['Challenge ID', 'Created At', 'Updated At', 'Game ID', '
 const ROOM_HEADERS = ['Room Code', 'Created At', 'Join Deadline', 'Started At', 'Finished At', 'Game ID', 'Game Name', 'Creator Email', 'Creator Name', 'Status', 'Max Players'];
 const ROOM_MEMBER_HEADERS = ['Room Code', 'Student Email', 'Student Name', 'Joined At', 'Score', 'Accuracy'];
 const ROOM_GAME_NAMES = {
-    memory: 'Sequence Studio', attention: 'Color Focus', language: 'Word Scramble', math: 'Quick Calculations',
+    memory: 'Simon Says', attention: 'Color Focus', language: 'Word Scramble', math: 'Quick Calculations',
     logic: 'Pattern Finder', flexibility: 'Rule Switch', speed: 'Quick Spot', pinpoint: 'Pinpoint',
     crossclimb: 'Crossclimb', queens: 'Queens', tango: 'Tango', zip: 'Zip', 'mini-sudoku': 'Mini Sudoku',
     patches: 'Patches', wend: 'Wend', knifeshow: 'Knife Show', snowrider: 'Snow Rider 3D', dino: 'Dino Runner',
     chess: 'Chess', 'word-association': 'Word Association', 'ludo-king': 'Ludo King', 'snakes-ladders': 'Snakes & Ladders',
     '2048': '2048', minesweeper: 'Minesweeper', 'connect-4': 'Connect 4', wordle: 'Wordle',
     snake: 'Snake', 'flappy-bird': 'Flappy Bird', 'brick-breaker': 'Brick Breaker',
+    'whack-mole': 'Whack-a-Mole', 'cookie-clicker': 'Cookie Clicker', 'guess-number': 'Guess the Number',
+    'color-flood': 'Color Flood', 'memory-match': 'Memory Card Match', 'tic-tac-toe': 'Tic-Tac-Toe',
+    'rock-paper-scissors': 'Rock, Paper, Scissors', 'dice-battle': 'Dice Roller Battle',
+    'coin-flip-tycoon': 'Coin Flipper Tycoon', pong: 'Pong', asteroids: 'Asteroids', frogger: 'Frogger Crossing',
+    'space-invaders': 'Space Invaders', 'lunar-lander': 'Lunar Lander', 'bubble-shooter': 'Bubble Shooter',
+    'lights-out': 'Lights Out', 'tower-hanoi': 'Tower of Hanoi', slitherlink: 'Slitherlink', mastermind: 'Mastermind',
+    'slide-puzzle': '15-Puzzle', checkers: 'Checkers', 'geometry-dash': 'Geometry Dash',
+    'fruit-ninja': 'Fruit Ninja', 'stack-tower': 'Stack Tower', 'falling-blocks': 'Avoid Falling Blocks',
+    'helix-jump': 'Helix Jump', 'typing-racer': 'Typing Speed Racer', 'quick-draw': 'Quick Draw',
+    'bop-it': 'Bop It', 'piano-tiles': 'Don’t Touch the Red', 'hoop-shot': 'Hoop Shot',
+    'hexagon-dodger': 'Infinite Hexagon Dodger', 'word-scramble-scavenger': 'Word Scramble Scavenger',
+    'balloon-pop-math': 'Balloon Pop Math', 'tunnel-runner': 'Endless Tunnel Runner',
+    'orbit-golf': 'Gravity Orbit Space Golf', 'sound-matcher': 'Sound Matcher', 'maze-tracer': 'Maze Path Tracer',
+    'rhythm-tap': 'Rhythm Tap Hero', 'fruit-catcher': 'Dropping Fruit Basket', 'missile-command': 'Cyber Defense Turret',
+    'word-search': 'Word Search', tetris: 'Falling Block Puzzle', 'artillery': 'Artillery Angle Match',
+    parking: 'Parallel Parking', pinball: 'Pinball Bouncer', 'duck-hunt': 'Duck Hunt Precision',
+    plinko: 'Plinko Peg Drop', 'tower-defense': 'Tower Defense Maze', platformer: 'Platformer Run',
+    'boxing-reaction': 'Boxing Punch Reaction', 'daily-crossword': 'Daily Crossword Mini',
+    'zombie-survival': 'Top-Down Zombie Survival', 'burger-assembly': 'Burger Assembly Line',
+    'air-hockey': 'Air Hockey Micro', 'minecart-runner': 'Mine Cart Rail Balance',
 };
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const gamePalSpreadsheetId = () => process.env.GAMEPAL_SPREADSHEET_ID || process.env.SPREADSHEET_ID;

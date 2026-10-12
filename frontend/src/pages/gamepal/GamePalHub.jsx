@@ -8,13 +8,15 @@ import SpecialMiniGame from './SpecialMiniGames';
 import BoardMiniGame from './BoardMiniGames';
 import ArcadeMiniGame from './ArcadeMiniGames';
 import CanvasSpecialMiniGame from './CanvasSpecialGames';
+import AdditionalMiniGame from './AdditionalMiniGames';
+import { EXTRA_GAME_IDS, EXTRA_GAMES, EXTRA_GAME_RULES } from './AdditionalGameCatalog';
 import GameArtwork from './GameArtwork';
 import DriveImage from '../../components/ui/DriveImage';
 import ModalPortal from '../../components/ui/ModalPortal';
 
 const CATEGORIES = ['Memory', 'Attention', 'Language', 'Math', 'Problem Solving', 'Flexibility', 'Speed'];
-const GAMES = [
-  { id: 'memory', name: 'Sequence Studio', category: 'Memory', icon: 'ph-grid-four', tint: '#38bdf8', summary: 'Hold a growing pattern in mind and recall it.' },
+const BASE_GAMES = [
+  { id: 'memory', name: 'Simon Says', category: 'Memory', icon: 'ph-grid-four', tint: '#38bdf8', summary: 'Watch a growing color-and-sound pattern, then repeat it in order.', mode: 'simon' },
   { id: 'attention', name: 'Color Focus', category: 'Attention', icon: 'ph-eye', tint: '#a78bfa', summary: 'Ignore the word and respond to the ink color.' },
   { id: 'language', name: 'Word Scramble', category: 'Language', icon: 'ph-text-aa', tint: '#fb7185', summary: 'Rebuild a word from a shuffled set of letters.' },
   { id: 'math', name: 'Quick Calculations', category: 'Math', icon: 'ph-calculator', tint: '#34d399', summary: 'Solve short arithmetic challenges under a light pace.' },
@@ -44,6 +46,7 @@ const GAMES = [
   { id: 'flappy-bird', name: 'Flappy Bird', category: 'Speed', icon: 'ph-bird', tint: '#38bdf8', summary: 'Tap to fly through the pipe gaps and set a new distance record.' },
   { id: 'brick-breaker', name: 'Brick Breaker', category: 'Speed', icon: 'ph-square', tint: '#fb923c', summary: 'Bounce the ball off your paddle and clear the neon brick wall.' },
 ];
+const GAMES = [...BASE_GAMES, ...EXTRA_GAMES];
 
 const REFERENCE_GAME_IDS = new Set(['pinpoint', 'crossclimb', 'queens', 'tango', 'zip', 'mini-sudoku', 'patches', 'wend']);
 const SPECIAL_GAME_IDS = new Set(['knifeshow', 'snowrider', 'dino', 'chess', 'word-association']);
@@ -51,7 +54,7 @@ const CANVAS_SPECIAL_GAME_IDS = new Set(['knifeshow', 'snowrider', 'dino']);
 const BOARD_GAME_IDS = new Set(['ludo-king', 'snakes-ladders']);
 const ARCADE_GAME_IDS = new Set(['2048', 'minesweeper', 'connect-4', 'wordle', 'snake', 'flappy-bird', 'brick-breaker']);
 const GAME_RULES = {
-  memory: { goal: 'Remember the symbol sequence, then select the matching pattern.', controls: 'Watch the sequence until it hides, then tap the matching answer.', scoring: 'Correct answers and quicker responses earn more points. Difficulty adapts each round.' },
+  memory: { goal: 'Watch a growing color-and-sound pattern, then repeat it in the same order.', controls: 'Wait for the playback to finish, then tap the matching pads in sequence.', scoring: 'Each completed sequence adds a point; one incorrect pad ends the run.' },
   attention: { goal: 'Choose the color of the letters, ignoring the word itself.', controls: 'Tap the answer that matches the ink color.', scoring: 'Ten quick rounds; accuracy and response time shape your score.' },
   language: { goal: 'Unscramble the letters to make the hidden word.', controls: 'Tap the correct word from the four choices.', scoring: 'Ten rounds with longer words as your level rises.' },
   math: { goal: 'Solve each short arithmetic problem.', controls: 'Tap the correct answer before moving to the next round.', scoring: 'Correct answers and speed add points; problem difficulty adjusts as you play.' },
@@ -80,6 +83,7 @@ const GAME_RULES = {
   snake: { goal: 'Collect as many energy orbs as possible without hitting a wall or your trail.', controls: 'Use arrow keys or WASD; mobile players can use the direction pad.', scoring: 'Each orb increases your score. Your personal best is saved on this device.' },
   'flappy-bird': { goal: 'Fly through as many pipe gaps as possible.', controls: 'Tap, click, or press Space/Up to flap. Each gap adds one point.', scoring: 'Your score is the number of pipes cleared; your best run is saved on this device.' },
   'brick-breaker': { goal: 'Clear every brick while keeping the ball in play.', controls: 'Move the paddle with your mouse, touch, or Left/Right keys. Paddle-edge hits steer the ball.', scoring: 'Bricks add points. Clear the wall for a perfect result; you have three lives.' },
+  ...EXTRA_GAME_RULES,
 };
 
 const indiaDateKey = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
@@ -104,6 +108,8 @@ export default function GamePalHub() {
   const [roomClock, setRoomClock] = useState(0);
   const [groupCelebration, setGroupCelebration] = useState(null);
   const [activeTab, setActiveTab] = useState('Today');
+  const [libraryCategory, setLibraryCategory] = useState('All');
+  const [librarySearch, setLibrarySearch] = useState('');
   const [selectedGoals, setSelectedGoals] = useState([]);
   const [completedToday, setCompletedToday] = useState([]);
   const [loading, setLoading] = useState(() => Boolean(user?.email));
@@ -470,6 +476,9 @@ export default function GamePalHub() {
   };
 
   if (activeGame) {
+    if (EXTRA_GAME_IDS.has(activeGame.id) || activeGame.id === 'memory') {
+      return <AdditionalMiniGame game={activeGame} initialLevel={Math.min(5, Math.max(1, Number(stats.games?.[activeGame.name]?.level) || 1))} onComplete={handleGameComplete} onExit={() => { window.clearTimeout(completionTransitionRef.current); completionTransitionRef.current = null; completionHandled.current = false; setActiveChallenge(null); setActiveRoom(null); setActiveGame(null); }} />;
+    }
     const Game = BOARD_GAME_IDS.has(activeGame.id) ? BoardMiniGame : ARCADE_GAME_IDS.has(activeGame.id) ? ArcadeMiniGame : CANVAS_SPECIAL_GAME_IDS.has(activeGame.id) ? CanvasSpecialMiniGame : SPECIAL_GAME_IDS.has(activeGame.id) ? SpecialMiniGame : REFERENCE_GAME_IDS.has(activeGame.id) ? ReferenceMiniGame : CognitiveMiniGame;
     const initialLevel = Math.min(5, Math.max(1, Number(stats.games?.[activeGame.name]?.level) || 1));
     return <Game game={activeGame} initialLevel={initialLevel} onComplete={handleGameComplete} onExit={() => { window.clearTimeout(completionTransitionRef.current); completionTransitionRef.current = null; completionHandled.current = false; setActiveChallenge(null); setActiveRoom(null); setActiveGame(null); }} />;
@@ -531,9 +540,10 @@ export default function GamePalHub() {
 
       {activeTab === 'Game library' && (
         <section className="gamepal-library-section">
-          <div className="gamepal-section-heading"><div><p className="eyebrow">Play at your own pace</p><h2>Game library</h2><span>{GAMES.length} mini-games across seven focus areas. Choose any game to play.</span></div></div>
+          <div className="gamepal-section-heading"><div><p className="eyebrow">Play at your own pace</p><h2>Game library</h2><span>{GAMES.length} games across seven focus areas. Choose any game to play.</span></div></div>
+          <div className="gamepal-library-filters"><label className="gamepal-library-search"><i className="ph ph-magnifying-glass"></i><input value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} placeholder="Find a game" aria-label="Find a game" /></label><div className="gamepal-library-categories" aria-label="Filter games by category">{['All', ...CATEGORIES].map((category) => <button type="button" key={category} className={libraryCategory === category ? 'active' : ''} onClick={() => setLibraryCategory(category)}>{category}</button>)}</div></div>
           <div className="gamepal-card-grid">
-            {GAMES.map((game) => <button type="button" className="gamepal-game-card" key={game.id} onClick={() => openGameRules(game)} style={{ '--game-tint': game.tint }}><GameArtwork game={game} compact /><span className="gamepal-game-domain">{game.category}</span><strong>{game.name}</strong><span className="gamepal-game-summary">{game.summary}</span><span className="gamepal-game-cta">Play game <i className="ph ph-arrow-up-right"></i></span></button>)}
+            {GAMES.filter((game) => (libraryCategory === 'All' || game.category === libraryCategory) && `${game.name} ${game.summary} ${game.category}`.toLowerCase().includes(librarySearch.trim().toLowerCase())).map((game) => <button type="button" className="gamepal-game-card" key={game.id} onClick={() => openGameRules(game)} style={{ '--game-tint': game.tint }}><GameArtwork game={game} compact /><span className="gamepal-game-domain">{game.category}</span><strong>{game.name}</strong><span className="gamepal-game-summary">{game.summary}</span><span className="gamepal-game-cta">Play game <i className="ph ph-arrow-up-right"></i></span></button>)}
           </div>
         </section>
       )}

@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pipeline } = require('node:stream/promises');
 const { createEmailTransport, getEmailFrom } = require('../services/emailTransport');
+const { requiresPriorExperience } = require('../utils/jobEligibility');
 
 // Helpers
 const buildCourseMap = async () => {
@@ -511,8 +512,7 @@ const applyForJob = async (req, res) => {
             }
         }
         if (!opening) return res.status(404).json({ success: false, message: 'This job opening is no longer available.' });
-        const requiresExperience = /experienced|\d\s*\+?\s*years?|\d+\s*to\s*\d+\s*years?/i.test(getCol(opening, 12));
-        if (requiresExperience && /fresher|no experience|entry.level/i.test(student.fresherStatus)) {
+        if (requiresPriorExperience(getCol(opening, 12)) && /fresher|no experience|entry.level/i.test(student.fresherStatus)) {
             return res.status(403).json({ success: false, message: 'This opening requires prior experience. Your profile is marked as a fresher, so applications are disabled.' });
         }
         const openingStatus = normalize(opening[18] || 'yes');

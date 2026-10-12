@@ -4,6 +4,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../../components/ui/DriveImage';
 import { formatPortalDate, isEventPast } from '../../utils/portalDate';
+import { requiresPriorExperience } from '../../utils/jobEligibility';
 
 function CompanyLogo({ src, company, className = '' }) {
   return (
@@ -138,7 +139,7 @@ export default function JobVacancies() {
     groups.get(key).vacancies.push(vacancy);
     return groups;
   }, new Map()).values()].sort((a, b) => a.label.localeCompare(b.label));
-  const requiresExperience = (vacancy) => /experienced|\d\s*\+?\s*years?|\d+\s*to\s*\d+\s*years?/i.test(String(vacancy.experience || ''));
+  const requiresExperience = (vacancy) => requiresPriorExperience(vacancy?.experience);
   const studentIsFresher = /fresher|no experience|entry.level/i.test(String(user?.fresherStatus || ''));
   const modalJobExpired = jobModal ? isEventExpired(jobModal.lastDate) : false;
   const modalJobApplied = jobModal ? appliedJobs.some((job) => String(job.jobId) === String(jobModal.newsletterId)) : false;

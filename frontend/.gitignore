@@ -26,3 +26,16 @@ dist-electron
 
 public/downloads/*.exe
 public/downloads/*.apk
+
+# Environment configuration - keep real values private
+.env
+.env.*
+!.env.native.example
+
+# Apple signing certificates and keys
+*.p12
+*.pfx
+*.mobileprovision
+*.provisionprofile
+*.cer
+*.privatekey

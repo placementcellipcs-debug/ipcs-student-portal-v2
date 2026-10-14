@@ -28,7 +28,11 @@ const getActiveMaterial = (row, index) => {
     const status = String(row[6] || 'active').trim().toLowerCase();
     if (status.includes('inactive') || status === 'false') return null;
     return {
-        id: row[0] || `MAT-${index}`,
+        // Column A is a course/group label (for example, "AIDM_Modules"),
+        // repeated for every slide deck. Use the physical sheet row as the
+        // lookup ID so each module resolves to its own OneDrive link.
+        id: `MAT-ROW-${index + 1}`,
+        materialGroupId: row[0] || '',
         course: row[1] || '',
         topic: row[2] || 'General',
         title: row[3] || 'Study Material',

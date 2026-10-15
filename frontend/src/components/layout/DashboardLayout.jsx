@@ -5,7 +5,7 @@ import api from '../../config/axios';
 import DriveImage from '../ui/DriveImage';
 import ModalPortal from '../ui/ModalPortal';
 import ipcsGlobalLogo from '../../assets/ipcs-global-logo.png';
-import { formatPortalDate, isEventPast } from '../../utils/portalDate';
+import { formatPortalDate, formatPortalTime, isEventPast } from '../../utils/portalDate';
 
 const COVER_BANNER_URL = 'https://lh3.googleusercontent.com/d/1eiP135HOsuG3MEaEplNblmcLewjnKXp6';
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -534,7 +534,7 @@ export default function DashboardLayout() {
             {drivePopup.posterLink && <DriveImage className="drive-reminder-poster" src={drivePopup.posterLink} alt={`${eventTitle(drivePopup)} poster`} />}
             <p className="eyebrow">Placement drive reminder</p>
             <h2 id="drive-reminder-title">{eventTitle(drivePopup)}</h2>
-            <p className="drive-reminder-meta">{eventDateLabel(drivePopup)}{(drivePopup.time || drivePopup['Time of the Event']) ? ` · ${drivePopup.time || drivePopup['Time of the Event']}` : ''}</p>
+            <p className="drive-reminder-meta">{eventDateLabel(drivePopup)}{(drivePopup.time || drivePopup['Time of the Event']) ? ` · ${formatPortalTime(drivePopup.time || drivePopup['Time of the Event']) || 'Time TBA'}` : ''}</p>
             <p className="drive-reminder-description">{drivePopup.description || drivePopup.Description || 'Review the role details and let the placement team know if you plan to attend.'}</p>
             {driveActionStatus && <div className={`alert alert-${driveActionStatus.type}`}>{driveActionStatus.message}</div>}
             <div className="drive-reminder-actions">

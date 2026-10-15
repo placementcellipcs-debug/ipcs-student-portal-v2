@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import DriveImage from '../../components/ui/DriveImage';
 import ModalPortal from '../../components/ui/ModalPortal';
-import { formatPortalDate, isEventPast, parsePortalDate } from '../../utils/portalDate';
+import { formatPortalDate, formatPortalTime, isEventPast, parsePortalDate } from '../../utils/portalDate';
 
 export default function EventsAndDrives() {
   const { user } = useOutletContext();
@@ -193,7 +193,7 @@ export default function EventsAndDrives() {
           <button type="button" className="upcoming-event-card" key={event.id || event['Drive ID'] || `${event.title}-${index}`} onClick={() => { setEventModal(event); setRsvpStatus(null); }}>
             <span className="upcoming-event-date-label">{formatPortalDate(event.date || event['Date of the Event']) || 'Date to be announced'}</span>
             <strong>{event.title || event.Title || 'IPCS event'}</strong>
-            <span>{event.type || event.Event || 'General event'}{(event.time || event['Time of the Event']) ? ` · ${event.time || event['Time of the Event']}` : ''}</span>
+            <span>{event.type || event.Event || 'General event'}{(event.time || event['Time of the Event']) ? ` · ${formatPortalTime(event.time || event['Time of the Event']) || 'Time TBA'}` : ''}</span>
             <span>{event.location || event['Event Hapening in'] || 'Location to be announced'} <i className="ph ph-arrow-up-right"></i></span>
           </button>
         )) : <div className="events-empty-note"><i className="ph ph-calendar-blank"></i><div><strong>No upcoming events.</strong><span>New branch events and placement drives will show here.</span></div></div>}
@@ -217,8 +217,8 @@ export default function EventsAndDrives() {
               <div className="event-modal-body">
                   {!eventModalIsPast && (eventModal.posterLink || eventModal['Poster Link']) && <DriveImage className="event-modal-poster" src={eventModal.posterLink || eventModal['Poster Link']} alt={`${eventModal.title || eventModal.Title} poster`} />}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', background: 'var(--input-bg)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--input-border)', marginBottom: '1.5rem' }}>
-                      <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Date</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{formatPortalDate(eventModal.date || eventModal['Date of the Event']) || eventModal.date || eventModal['Date of the Event'] || 'TBA'}</span></div>
-                      <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Time</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{eventModal.time || eventModal['Time of the Event'] || 'TBA'}</span></div>
+                      <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Date</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{formatPortalDate(eventModal.date || eventModal['Date of the Event']) || 'TBA'}</span></div>
+                      <div><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Time</strong><span style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>{formatPortalTime(eventModal.time || eventModal['Time of the Event']) || 'TBA'}</span></div>
                       <div style={{ gridColumn: '1 / -1' }}><strong style={{ display:'block', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform:'uppercase', marginBottom: '4px' }}>Location</strong><span style={{ color: '#38bdf8', fontWeight: 700, fontSize: '1rem' }}>{eventModal.location || eventModal['Event Hapening in'] || 'TBA'}</span></div>
                   </div>
                   

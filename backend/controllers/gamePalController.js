@@ -1,5 +1,6 @@
 const DatabaseService = require('../services/dbService');
 const crypto = require('crypto');
+const { formatDateIndia, formatDateTimeIndia, parsePortalDateTime } = require('../utils/portalDateTime');
 
 const CATEGORIES = ["Memory", "Attention", "Language", "Problem Solving", "Math", "Flexibility", "Speed"];
 const FRIEND_HEADERS = ['Challenge ID', 'Created At', 'Updated At', 'Game ID', 'Game Name', 'Creator Email', 'Creator Name', 'Opponent Email', 'Opponent Name', 'Creator Score', 'Creator Accuracy', 'Opponent Score', 'Opponent Accuracy', 'Status'];
@@ -35,7 +36,7 @@ const ROOM_GAME_NAMES = {
     'air-hockey': 'Air Hockey Micro', 'minecart-runner': 'Mine Cart Rail Balance',
 };
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const gamePalSpreadsheetId = () => process.env.GAMEPAL_SPREADSHEET_ID || process.env.SPREADSHEET_ID;
+const gamePalSpreadsheetId = () => DatabaseService.getSpreadsheetId('GamePal_Rooms!A:K');
 const roomSheetSetups = new Map();
 
 const readRoomRows = async (spreadsheetId) => {
@@ -68,7 +69,7 @@ const roomMemberRowIndex = (rows, code, email) => rows.findIndex((row, index) =>
     && String(row[0] || '').trim().toUpperCase() === code
     && String(row[1] || '').trim().toLowerCase() === email);
 
-const appendRoomMember = async (room, member, spreadsheetId) => DatabaseService.appendRow('GamePal_Room_Members!A:F', [
+const appendRoomMember = async (room, member, spreadsheetId) => DatabaseService.appendRowRaw('GamePal_Room_Members!A:F', [
     room.code, member.email, member.name, member.joinedAt, member.score ?? '', member.accuracy ?? '',
 ], spreadsheetId);
 
@@ -78,7 +79,7 @@ const saveRoomMemberScore = async (rowIndex, score, accuracy, spreadsheetId) => 
 
 const updateRoomCompletion = async (room, rowIndex, spreadsheetId) => {
     room.status = 'Complete';
-    room.finishedAt = new Date().toISOString();
+    room.finishedAt = formatDateTimeIndia();
     await saveRoom(room, rowIndex, spreadsheetId);
     return room;
 };
@@ -133,7 +134,7 @@ const getGroupRooms = async (req, res) => {
             if (room.status === 'In progress' && room.participants.length > 1 && room.participants.every((member) => member.score != null)) {
                 await updateRoomCompletion(room, index, spreadsheetId);
             }
-            if (room.status === 'Waiting' && Date.parse(room.joinDeadline) <= Date.now() && room.participants.length < 2) {
+            if (room.status === 'Waiting' && parsePortalDateTime(room.joinDeadline) <= Date.now() && room.participants.length < 2) {
                 room.status = 'Expired';
                 await saveRoom(room, index, spreadsheetId);
             }
@@ -162,13 +163,13 @@ const createGroupRoom = async (req, res) => {
         const profile = creatorRows.slice(1).reverse().find((row) => String(row[3] || '').trim().toLowerCase() === creatorEmail);
         const now = Date.now();
         const room = {
-            code: generateRoomCode(existing), createdAt: new Date(now).toISOString(),
-            joinDeadline: new Date(now + 5 * 60 * 1000).toISOString(), startedAt: '', finishedAt: '',
+            code: generateRoomCode(existing), createdAt: formatDateTimeIndia(new Date(now)),
+            joinDeadline: formatDateTimeIndia(new Date(now + 5 * 60 * 1000)), startedAt: '', finishedAt: '',
             gameId, gameName, creatorEmail, creatorName: profile?.[1] || req.user?.name || 'Student',
             status: 'Waiting', maxPlayers,
-            participants: [{ email: creatorEmail, name: profile?.[1] || req.user?.name || 'Student', joinedAt: new Date(now).toISOString(), score: null, accuracy: null }],
+            participants: [{ email: creatorEmail, name: profile?.[1] || req.user?.name || 'Student', joinedAt: formatDateTimeIndia(new Date(now)), score: null, accuracy: null }],
         };
-        await DatabaseService.appendRow('GamePal_Rooms!A:K', roomToRow(room), spreadsheetId);
+        await DatabaseService.appendRowRaw('GamePal_Rooms!A:K', roomToRow(room), spreadsheetId);
         await appendRoomMember(room, room.participants[0], spreadsheetId);
         return res.status(201).json({ success: true, room: publicRoom(room) });
     } catch (error) {
@@ -195,11 +196,11 @@ const joinGroupRoom = async (req, res) => {
             return res.status(200).json({ success: true, room: publicRoom(room), alreadyJoined: true });
         }
         if (room.status !== 'Waiting') return res.status(409).json({ success: false, message: 'This room has already started or ended. It is closed to joining.' });
-        if (Date.parse(room.joinDeadline) <= Date.now()) return res.status(410).json({ success: false, message: 'The joining window has ended for this room.' });
+        if (parsePortalDateTime(room.joinDeadline) <= Date.now()) return res.status(410).json({ success: false, message: 'The joining window has ended for this room.' });
         const studentRows = await DatabaseService.getSheetData('Data!A:AG');
         const profile = studentRows.slice(1).reverse().find((row) => String(row[3] || '').trim().toLowerCase() === email);
         if (!profile) return res.status(403).json({ success: false, message: 'Only signed-in IPCS students can join a group room.' });
-        const member = { email, name: profile[1] || req.user?.name || 'Student', joinedAt: new Date().toISOString(), score: null, accuracy: null };
+        const member = { email, name: profile[1] || req.user?.name || 'Student', joinedAt: formatDateTimeIndia(), score: null, accuracy: null };
         await appendRoomMember(room, member, spreadsheetId);
         room.participants.push(member);
         return res.status(200).json({ success: true, room: publicRoom(room) });
@@ -227,7 +228,7 @@ const startGroupRoom = async (req, res) => {
             return res.status(409).json({ success: false, message: 'At least two students must join before the game can start.' });
         }
         room.status = 'In progress';
-        room.startedAt = new Date().toISOString();
+        room.startedAt = formatDateTimeIndia();
         await saveRoom(room, index, spreadsheetId);
         return res.status(200).json({ success: true, room: publicRoom(room) });
     } catch (error) {
@@ -313,11 +314,11 @@ const createFriendChallenge = async (req, res) => {
         const creator = students.slice(1).reverse().find((row) => String(row[3] || '').trim().toLowerCase() === creatorEmail);
         const opponent = students.slice(1).reverse().find((row) => String(row[3] || '').trim().toLowerCase() === opponentEmail);
         if (!opponent) return res.status(404).json({ success: false, message: 'No IPCS student account was found for that email.' });
-        const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+        const now = formatDateTimeIndia();
         const id = `GP-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
         const spreadsheetId = gamePalSpreadsheetId();
         await DatabaseService.ensureWorksheetWithHeaders('GamePal_Challenges', FRIEND_HEADERS, spreadsheetId);
-        await DatabaseService.appendRow('GamePal_Challenges!A:N', [
+        await DatabaseService.appendRowRaw('GamePal_Challenges!A:N', [
             id, now, now, gameId, gameName, creatorEmail, creator?.[1] || 'Student', opponentEmail, opponent?.[1] || 'Student', '', '', '', '', 'Waiting for friend',
         ], spreadsheetId);
         return res.status(201).json({ success: true, challenge: { id, gameId, gameName, creatorEmail, creatorName: creator?.[1] || 'Student', opponentEmail, opponentName: opponent?.[1] || 'Student', creatorScore: null, opponentScore: null, status: 'Waiting for friend' } });
@@ -350,7 +351,7 @@ const submitFriendChallengeScore = async (req, res) => {
         if (row[scoreColumn] !== '' && row[scoreColumn] != null) return res.status(409).json({ success: false, message: 'Your score has already been recorded for this challenge.' });
         row[scoreColumn] = String(Math.round(score));
         row[accuracyColumn] = String(Math.round(accuracy));
-        row[2] = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+        row[2] = formatDateTimeIndia();
         const creatorScore = row[9] === '' || row[9] == null ? null : Number(row[9]);
         const opponentScore = row[11] === '' || row[11] == null ? null : Number(row[11]);
         row[13] = creatorScore === null || opponentScore === null ? 'Waiting for friend' : 'Complete';
@@ -452,11 +453,11 @@ const submitGameSession = async (req, res) => {
         const { name, rollNo, branch, gameName, category, score, accuracy, timeSeconds } = req.body;
         const gamePalDbId = gamePalSpreadsheetId();
         
-        const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-        const todayDate = new Date().toLocaleDateString('en-GB');
+        const timestamp = formatDateTimeIndia();
+        const todayDate = formatDateIndia();
 
         // Log session to GamePal_Logs
-        await DatabaseService.appendRow("GamePal_Logs!A:I", [
+        await DatabaseService.appendRowRaw("GamePal_Logs!A:I", [
             timestamp, rollNo || "N/A", name || "Student", email, gameName, category, String(score), `${accuracy}%`, String(timeSeconds)
         ], gamePalDbId);
 
@@ -497,9 +498,8 @@ const submitGameSession = async (req, res) => {
             if (lastDate === todayDate) {
                 streak = currentStreakVal;
             } else {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                streak = (lastDate === yesterday.toLocaleDateString('en-GB')) ? currentStreakVal + 1 : 1;
+                const yesterday = formatDateIndia(new Date(Date.now() - 24 * 60 * 60 * 1000));
+                streak = (lastDate === yesterday) ? currentStreakVal + 1 : 1;
             }
         }
 
@@ -512,7 +512,7 @@ const submitGameSession = async (req, res) => {
         if (rowIndex !== -1) {
             await DatabaseService.updateRow(`GamePal_Stats!A${rowIndex}:N${rowIndex}`, updatedRow, gamePalDbId);
         } else {
-            await DatabaseService.appendRow("GamePal_Stats!A:N", updatedRow, gamePalDbId);
+            await DatabaseService.appendRowRaw("GamePal_Stats!A:N", updatedRow, gamePalDbId);
         }
 
         return res.status(200).json({ success: true, overallScore: overall, streak });

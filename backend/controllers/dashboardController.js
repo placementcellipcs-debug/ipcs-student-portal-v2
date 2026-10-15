@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const { pipeline } = require('node:stream/promises');
 const { createEmailTransport, getEmailFrom } = require('../services/emailTransport');
 const { requiresPriorExperience } = require('../utils/jobEligibility');
+const { formatDateIndia, formatTimeIndia, formatDateTimeIndia, formatDateInputIndia } = require('../utils/portalDateTime');
 
 // Helpers
 const buildCourseMap = async () => {
@@ -201,7 +202,7 @@ const getDashboardData = async (req, res) => {
         let hasMarkedToday = false;
         let isScheduledToday = false;
         const now = new Date();
-        const todayStr = now.toLocaleDateString('en-GB');
+        const todayStr = formatDateIndia(now);
         
         for (let i = 1; i < schedData.length; i++) {
             if (branchMatches(schedData[i][2], actualBranch)) {
@@ -216,7 +217,7 @@ const getDashboardData = async (req, res) => {
                 let recDate = attData[i][8] || "";
                 let numRating = parseInt((attData[i][6] || "0").charAt(0)) || 0;
                 attendanceHistory.push({ timestamp: attData[i][0], rating: numRating, dateStr: recDate });
-                if (recDate === todayStr || attData[i][0].includes(now.toLocaleDateString())) hasMarkedToday = true;
+                if (recDate === todayStr || String(attData[i][0] || '').includes(todayStr)) hasMarkedToday = true;
             }
         }
         attendanceHistory.reverse();
@@ -273,8 +274,8 @@ const getDriveAlerts = async (req, res) => {
         const student = await findStudent(email);
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
         const [eventRows, responseRows] = await Promise.all([
-            DatabaseService.getSheetData('Event!A:K', process.env.SPREADSHEET_ID, 10),
-            DatabaseService.getSheetData('Drive_Registration!A:J', process.env.SPREADSHEET_ID, 10),
+            DatabaseService.getSheetData('Event!A:K', 10),
+            DatabaseService.getSheetData('Drive_Registration!A:J', 10),
         ]);
         const drives = [];
         for (let index = 1; index < eventRows.length; index++) {
@@ -430,12 +431,12 @@ const markAttendance = async (req, res) => {
         if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return res.status(400).json({ success: false, message: 'GPS required. Please enable Location Services.' });
 
         const now = new Date();
-        const timestamp = now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-        const istDate = new Date(timestamp);
-        const dateOnly = `${istDate.getDate().toString().padStart(2, '0')}/${(istDate.getMonth() + 1).toString().padStart(2, '0')}/${istDate.getFullYear()}`;
+        const timestamp = formatDateTimeIndia(now);
+        const dateOnly = formatDateIndia(now);
 
         // Basic Time Checks (9:30 AM to 7:00 PM)
-        const currentTimeMins = istDate.getHours() * 60 + istDate.getMinutes();
+        const [currentHour, currentMinute] = formatTimeIndia(now).split(':').map(Number);
+        const currentTimeMins = currentHour * 60 + currentMinute;
         const isTimeValid = (currentTimeMins >= (9 * 60 + 30) && currentTimeMins <= (19 * 60));
 
         let isScheduledToday = false;
@@ -474,7 +475,7 @@ const markAttendance = async (req, res) => {
         if (!isWithinGeofence) return res.status(400).json({ success: false, message: `Must be within 1000m of campus. (You are ${Math.round(calculatedDistance)}m away).` }); 
         const safeRating = Math.min(5, Math.max(1, Math.round(Number(rating) || 0)));
         if (!safeRating) return res.status(400).json({ success: false, message: 'Select a session rating before submitting.' });
-        await DatabaseService.appendRow("Talentino_Attendance!A:J", [timestamp, email, student.name, student.branch, student.course, `${latitude},${longitude}`, `${safeRating} / 5 Stars`, String(feedback || '').slice(0, 1000) || "None", dateOnly, "None"]);
+        await DatabaseService.appendRowRaw("Talentino_Attendance!A:J", [timestamp, email, student.name, student.branch, student.course, `${latitude},${longitude}`, `${safeRating} / 5 Stars`, String(feedback || '').slice(0, 1000) || "None", dateOnly, "None"]);
 
         return res.status(200).json({ success: true, message: "Attendance marked successfully!" });
     } catch (error) { 
@@ -493,7 +494,7 @@ const applyForJob = async (req, res) => {
         if (!/^(yes|true|1)$/i.test(student.vacancyOpen)) return res.status(403).json({ success: false, message: 'Your access to job openings is currently restricted.' });
         const { jobId } = req.body;
         if (!jobId) return res.status(400).json({ success: false, message: 'Select a valid job opening.' });
-        const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+        const timestamp = formatDateTimeIndia();
 
         const checkData = await DatabaseService.getSheetData("Opening_Applied!A:J");
         for (let i = 1; i < checkData.length; i++) {
@@ -531,8 +532,8 @@ const applyForJob = async (req, res) => {
         const placementOfficer = getCol(opening, 17, 'TPO Auto-Assigned');
         if (!student.resume || student.resume === 'N/A') return res.status(400).json({ success: false, message: 'Upload your resume before applying.' });
 
-        await DatabaseService.appendRow("Opening_Applied!A:N", [timestamp, student.name, student.phone, student.email, student.rollNo, student.course, student.branch, student.qualification || "N/A", student.resume, jobId, companyName, position, placementOfficer, "Applied"]);
-        await DatabaseService.appendRow("TPO_Log!A:V", [ timestamp, student.name, student.phone, student.email, student.rollNo, student.course, student.branch, student.qualification || "N/A", student.resume, jobId, companyName, position, placementOfficer, "Applied", "", "", "", "", "", "", "", "" ]);
+        await DatabaseService.appendRowRaw("Opening_Applied!A:N", [timestamp, student.name, student.phone, student.email, student.rollNo, student.course, student.branch, student.qualification || "N/A", student.resume, jobId, companyName, position, placementOfficer, "Applied"]);
+        await DatabaseService.appendRowRaw("TPO_Log!A:V", [ timestamp, student.name, student.phone, student.email, student.rollNo, student.course, student.branch, student.qualification || "N/A", student.resume, jobId, companyName, position, placementOfficer, "Applied", "", "", "", "", "", "", "", "" ]);
 
         return res.status(200).json({ success: true, message: "Applied successfully!" });
     } catch (error) { 
@@ -546,9 +547,11 @@ const updateProfile = async (req, res) => {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
         const { age, gender, studyStatus, completedDate, stream, homeTown, fresherStatus, qualification, linkedin, instagram, placementReq, parentName, parentContact } = req.body;
+        const numericAge = Number(age);
+        const savedAge = age && Number.isFinite(numericAge) ? numericAge : "N/A";
         
         const { googleSheets, auth } = await connectSheet();
-        const spreadsheetId = process.env.SPREADSHEET_ID;
+        const spreadsheetId = DatabaseService.getSpreadsheetId('Data!A:AF');
 
         const rows = await DatabaseService.getSheetData("Data!A:AF");
         let targetRowIndex = -1;
@@ -563,12 +566,12 @@ const updateProfile = async (req, res) => {
             googleSheets.spreadsheets.values.batchUpdate({
                 auth, spreadsheetId,
                 requestBody: {
-                    valueInputOption: "USER_ENTERED",
+                    valueInputOption: "RAW",
                     data: [
                         { range: `Data!K${targetRowIndex}:Q${targetRowIndex}`, values: [[homeTown || "N/A", qualification || "N/A", stream || "N/A", fresherStatus || "N/A", linkedin || "N/A", instagram || "N/A", placementReq || "N/A"]] },
                         { range: `Data!W${targetRowIndex}:X${targetRowIndex}`, values: [[parentName || "N/A", parentContact || "N/A"]] },
-                        { range: `Data!Y${targetRowIndex}:Z${targetRowIndex}`, values: [[studyStatus || "Currently Studying", completedDate || "N/A"]] },
-                        { range: `Data!AA${targetRowIndex}:AB${targetRowIndex}`, values: [[age || "N/A", gender || "N/A"]] }
+                        { range: `Data!Y${targetRowIndex}:Z${targetRowIndex}`, values: [[studyStatus || "Currently Studying", formatDateInputIndia(completedDate) || "N/A"]] },
+                        { range: `Data!AA${targetRowIndex}:AB${targetRowIndex}`, values: [[savedAge, gender || "N/A"]] }
                     ]
                 }
             })
@@ -621,7 +624,7 @@ const uploadDocument = async (req, res) => {
         }
 
         const { googleSheets, auth } = await connectSheet();
-        const spreadsheetId = process.env.SPREADSHEET_ID;
+        const spreadsheetId = DatabaseService.getSpreadsheetId('Data!A:D');
         const rows = await DatabaseService.getSheetData('Data!A:D');
         let targetRowIndex = -1;
         for (let i = rows.length - 1; i >= 1; i--) {
@@ -660,7 +663,7 @@ const updatePassword = async (req, res) => {
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
         const { currentPassword, newPassword } = req.body;
         const { googleSheets, auth } = await connectSheet();
-        const spreadsheetId = process.env.SPREADSHEET_ID;
+        const spreadsheetId = DatabaseService.getSpreadsheetId('Data!A:AF');
 
         const rows = await DatabaseService.getSheetData("Data!A:AF");
         let targetRowIndex = -1;
@@ -701,8 +704,8 @@ const submitIssue = async (req, res) => {
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
         const { issueDetails, location } = req.body;
         if (!String(issueDetails || '').trim()) return res.status(400).json({ success: false, message: 'Describe the issue before submitting.' });
-        const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-        await DatabaseService.appendRow("Issues!A:K", [ timestamp, student.name, student.phone || "N/A", student.rollNo || "N/A", student.email, student.branch || "N/A", student.course || "N/A", String(location || 'Student Portal').slice(0, 120), String(issueDetails).trim().slice(0, 2000), "Pending", "" ]);
+        const timestamp = formatDateTimeIndia();
+        await DatabaseService.appendRowRaw("Issues!A:K", [ timestamp, student.name, student.phone || "N/A", student.rollNo || "N/A", student.email, student.branch || "N/A", student.course || "N/A", String(location || 'Student Portal').slice(0, 120), String(issueDetails).trim().slice(0, 2000), "Pending", "" ]);
         return res.status(200).json({ success: true, message: "Issue reported successfully!" });
     } catch (error) { 
         return res.status(500).json({ success: false, message: "Failed to submit issue." }); 
@@ -722,7 +725,7 @@ const submitDriveResponse = async (req, res) => {
 
         const [rows, eventRows, contacts] = await Promise.all([
             DatabaseService.getSheetData("Drive_Registration!A:D"),
-            DatabaseService.getSheetData("Event!A:K", process.env.SPREADSHEET_ID, 60),
+            DatabaseService.getSheetData("Event!A:K", 60),
             DatabaseService.getSheetData("Contact!A:H"),
         ]);
         const event = eventRows.slice(1).find((row, index) => {
@@ -738,8 +741,8 @@ const submitDriveResponse = async (req, res) => {
             }
         }
 
-        const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-        await DatabaseService.appendRow("Drive_Registration!A:J", [ targetDriveId, student.name, student.phone || "N/A", student.email, student.course || "N/A", student.branch || "N/A", student.resume || "N/A", student.qualification || "N/A", status, timestamp ]);
+        const timestamp = formatDateTimeIndia();
+        await DatabaseService.appendRowRaw("Drive_Registration!A:J", [ targetDriveId, student.name, student.phone || "N/A", student.email, student.course || "N/A", student.branch || "N/A", student.resume || "N/A", student.qualification || "N/A", status, timestamp ]);
 
         if (status === 'Registered' && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
             try {

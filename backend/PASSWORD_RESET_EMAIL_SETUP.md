@@ -21,7 +21,13 @@ Create the App Password while signed into `placementcell.ipcs@gmail.com` with 2-
 
 ## Other required backend configuration
 
-- Set `SPREADSHEET_ID` to the portal's Google Sheets ID.
+- Configure the four active workbooks in the backend host's environment settings:
+  - `STUDENT_DATA_SPREADSHEET_ID` = `14WvBO50cY66NLQVQXs1OrR-jcOD6AQSKz9Yya60KG3o`
+  - `PLACEMENT_SPREADSHEET_ID` = `1eSMP6u8G11ErXOYS1XTU0qR4RvyCNcFQtP19dHkNz5c`
+  - `LEARNING_SPREADSHEET_ID` = `18alS1bVj33kZ8wX7VcQiwrPzLSfOyQWkc8fRooTD7Nk`
+  - `OPERATIONS_SPREADSHEET_ID` = `1qLS3e0xJX0IVhNoGFGM8uPtet7mxI6QHzpz-AwfoBnI`
+- The backend routes portal worksheets only to these four workbooks. GamePal and learning audit tabs are stored in the Learning workbook. Unknown worksheet names fail clearly instead of falling back to the old ecosystem workbook.
+- Grant the service account Editor access to all four workbooks. Keep sharing restricted to the service account and staff who need access.
 - Set `JWT_SECRET` to a long, random secret used only by the backend.
 - Provide the Google service-account credentials separately and securely. The backend expects `google-credentials.json` beside `server.js`; this private key is intentionally excluded from the ZIP.
 - Set any Drive IDs or Apps Script URLs needed by the Drive/photo features in the host's environment.

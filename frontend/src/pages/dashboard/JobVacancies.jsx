@@ -20,7 +20,13 @@ const isEventExpired = (dateStr) => {
   return isEventPast(dateStr);
 };
 
-const formatDateOrText = (value) => formatPortalDate(value) || (value ? String(value) : '—');
+const formatDateOrText = (value) => {
+  const formattedDate = formatPortalDate(value);
+  if (formattedDate) return formattedDate;
+  const text = String(value || '').trim();
+  if (!text) return '—';
+  return /^\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/.test(text) ? 'Date unavailable' : text;
+};
 
 const displayOpeningId = (value) => {
   const openingId = String(value || '').trim();

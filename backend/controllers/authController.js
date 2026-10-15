@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const AuthSessionService = require('../services/authSessionService');
 const { createEmailTransport, getEmailFrom } = require('../services/emailTransport');
+const { formatDateTimeIndia, formatDateInputIndia, parsePortalDateTime } = require('../utils/portalDateTime');
 
 const RESET_TOKEN_TTL_MS = 5 * 60 * 1000;
 const RESET_SHEET = 'Password_Reset_Tokens';
@@ -29,22 +30,7 @@ const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[character]));
 
-const getIndiaRegistrationTimestamp = (date = new Date()) => {
-    const parts = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Asia/Kolkata',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hourCycle: 'h23',
-    }).formatToParts(date).reduce((result, part) => {
-        if (part.type !== 'literal') result[part.type] = part.value;
-        return result;
-    }, {});
-    return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}:${parts.second} IST`;
-};
+const getIndiaRegistrationTimestamp = (date = new Date()) => formatDateTimeIndia(date);
 
 const findStudentByEmail = (rows, email) => {
     const wanted = String(email || '').trim().toLowerCase();
@@ -121,7 +107,7 @@ const requestPasswordReset = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Enter a valid student email address.' });
         }
 
-        const studentRows = await DatabaseService.getSheetData('Data!B:D', process.env.SPREADSHEET_ID, 0);
+        const studentRows = await DatabaseService.getSheetData('Data!B:D', 0);
         const student = findStudentByEmail(studentRows, email);
         if (!student) return res.status(404).json({ success: false, code: 'ACCOUNT_NOT_FOUND', message: 'Student account not found. Check the email address registered with IPCS Global.' });
         const hasSmtpSettings = Boolean(String(process.env.EMAIL_USER || '').trim() && String(process.env.EMAIL_PASS || '').trim());
@@ -136,7 +122,7 @@ const requestPasswordReset = async (req, res) => {
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
         const createdAt = new Date();
         const expiresAt = new Date(createdAt.getTime() + RESET_TOKEN_TTL_MS);
-        const tokenAppendRange = await DatabaseService.appendRowRaw(`${RESET_SHEET}!A:E`, [tokenHash, email, expiresAt.toISOString(), 'PENDING', createdAt.toISOString()]);
+        const tokenAppendRange = await DatabaseService.appendRowRaw(`${RESET_SHEET}!A:E`, [tokenHash, email, formatDateTimeIndia(expiresAt), 'PENDING', formatDateTimeIndia(createdAt)]);
         const tokenRowNumber = Number(String(tokenAppendRange).match(/!A(\d+):E\d+$/)?.[1]);
 
         const baseUrl = String(process.env.RESET_PASSWORD_BASE_URL || 'https://ipcstalenzo.com')
@@ -180,7 +166,7 @@ const resetPassword = async (req, res) => {
     activeResetTokens.add(tokenHash);
     try {
         await ensureResetSheet();
-        const resetRows = await DatabaseService.getSheetData(`${RESET_SHEET}!A:E`, process.env.SPREADSHEET_ID, 0);
+        const resetRows = await DatabaseService.getSheetData(`${RESET_SHEET}!A:E`, 0);
         let latestRecord = null;
         for (let index = resetRows.length - 1; index >= 1; index--) {
             const row = resetRows[index] || [];
@@ -198,12 +184,12 @@ const resetPassword = async (req, res) => {
                 break;
             }
         }
-        const expiresAt = Date.parse(latestRecord.row[2] || '');
+        const expiresAt = parsePortalDateTime(latestRecord.row[2]);
         if (latestForEmailRowNumber !== latestRecord.rowNumber || String(latestRecord.row[3] || '').toUpperCase() !== 'PENDING' || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
             return res.status(400).json({ success: false, message: 'This password reset link is invalid or has expired. Request a new link and try again.' });
         }
 
-        const studentRows = await DatabaseService.getSheetData('Data!B:D', process.env.SPREADSHEET_ID, 0);
+        const studentRows = await DatabaseService.getSheetData('Data!B:D', 0);
         const student = findStudentByEmail(studentRows, email);
         if (!student) return res.status(404).json({ success: false, code: 'ACCOUNT_NOT_FOUND', message: 'Student account not found.' });
 
@@ -211,7 +197,7 @@ const resetPassword = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(newPassword, salt);
         const nextSessionVersion = crypto.randomBytes(16).toString('hex');
-        const now = new Date().toISOString();
+        const now = formatDateTimeIndia();
         const tokenStatusUpdates = resetRows.reduce((updates, row, index) => {
             if (index > 0 && String(row?.[1] || '').trim().toLowerCase() === email && String(row?.[3] || '').toUpperCase() === 'PENDING') {
                 updates.push({ range: `${RESET_SHEET}!D${index + 1}`, values: [['USED']] });
@@ -238,13 +224,13 @@ const loginUser = async (req, res) => {
         const email = String(req.body?.email || '').trim().toLowerCase();
         const password = String(req.body?.password || '');
         if (!email || !password) return res.status(400).json({ success: false, message: "Email and password are required." });
-        if (!process.env.SPREADSHEET_ID || !process.env.JWT_SECRET) {
-            console.error('[auth/login] SPREADSHEET_ID or JWT_SECRET is not configured.');
+        if (!DatabaseService.hasSpreadsheetId('Data!A:AG') || !process.env.JWT_SECRET) {
+            console.error('[auth/login] STUDENT_DATA_SPREADSHEET_ID or JWT_SECRET is not configured.');
             return res.status(503).json({ success: false, message: 'Student login is temporarily unavailable. Please contact IPCS support.' });
         }
 
         // Always read current records so new registrations and admin changes are visible immediately.
-        const rows = await DatabaseService.getSheetData('Data!A:AG', process.env.SPREADSHEET_ID, 0);
+        const rows = await DatabaseService.getSheetData('Data!A:AG', 0);
         let userObj = null;
         let emailExists = false;
 
@@ -310,13 +296,13 @@ const registerUser = async (req, res) => {
         if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || !formData.password) {
             return res.status(400).json({ success: false, message: 'Enter a valid email address and password.' });
         }
-        if (!process.env.SPREADSHEET_ID || !process.env.JWT_SECRET) {
-            console.error('[auth/register] SPREADSHEET_ID or JWT_SECRET is not configured.');
+        if (!DatabaseService.hasSpreadsheetId('Data!A:AG') || !process.env.JWT_SECRET) {
+            console.error('[auth/register] STUDENT_DATA_SPREADSHEET_ID or JWT_SECRET is not configured.');
             return res.status(503).json({ success: false, message: 'Registration is temporarily unavailable. Please contact IPCS support.' });
         }
 
         // Do not use the normal 10-minute sheet cache for account creation.
-        const rows = await DatabaseService.getSheetData('Data!A:AG', process.env.SPREADSHEET_ID, 0);
+        const rows = await DatabaseService.getSheetData('Data!A:AG', 0);
         const headers = rows[0] || [];
 
         // Check if user already exists
@@ -355,7 +341,7 @@ const registerUser = async (req, res) => {
         const token = jwt.sign({ email: cleanEmail, rollNo: formData.rollNo || "N/A", branch: formData.branch || "Bangalore", sv: '0' }, process.env.JWT_SECRET, { expiresIn: '7d' });
         const newRow = [
             getIndiaRegistrationTimestamp(), String(formData.name || "N/A"), String(formData.phone || "N/A"), cleanEmail,           
-            String(hashedPassword), String(formData.rollNo || "N/A"), String(formData.joiningDate || "N/A"), String(formData.course || "N/A"),              
+            String(hashedPassword), String(formData.rollNo || "N/A"), formatDateInputIndia(formData.joiningDate) || "N/A", String(formData.course || "N/A"),
             String(formData.branch || "Bangalore"), String(photoUrl || ""), String(formData.homeTown || "N/A"), String(formData.qualification || "N/A"),       
             String(formData.stream || "N/A"), String(formData.fresherStatus || "N/A"), String(formData.linkedin || "N/A"), String(formData.instagram || "N/A"),           
             String(formData.placementReq || "N/A"), String(formData.friend1Name || "N/A"), String(formData.friend1Phone || "N/A"), String(formData.friend2Name || "N/A"),         
@@ -364,12 +350,12 @@ const registerUser = async (req, res) => {
         ];
 
         // Append to Database
-        const updatedRange = await DatabaseService.appendRowRaw('Data!A:AG', newRow, process.env.SPREADSHEET_ID);
+        const updatedRange = await DatabaseService.appendRowRaw('Data!A:AG', newRow);
         const appendedRowNumber = Number(String(updatedRange).match(/!A(\d+):/i)?.[1]);
         if (!Number.isInteger(appendedRowNumber) || appendedRowNumber < 2) {
             throw new Error(`Google Sheets returned an unexpected registration range: ${updatedRange}`);
         }
-        const savedRows = await DatabaseService.getSheetData(`Data!A${appendedRowNumber}:AG${appendedRowNumber}`, process.env.SPREADSHEET_ID, 0);
+        const savedRows = await DatabaseService.getSheetData(`Data!A${appendedRowNumber}:AG${appendedRowNumber}`, 0);
         const savedRow = savedRows[0] || [];
         if (String(savedRow[3] || '').trim().toLowerCase() !== cleanEmail || !String(savedRow[4] || '').startsWith('$2')) {
             throw new Error(`Registration row verification failed at ${updatedRange}.`);

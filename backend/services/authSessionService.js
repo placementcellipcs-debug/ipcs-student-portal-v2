@@ -1,4 +1,5 @@
 const DatabaseService = require('./dbService');
+const { formatDateTimeIndia } = require('../utils/portalDateTime');
 
 const SESSION_SHEET = 'Auth_Sessions';
 const SESSION_HEADERS = ['Email', 'Session Version', 'Updated At'];
@@ -29,7 +30,7 @@ const findLatest = (rows, email) => {
 
 const getSessionVersion = async (email, cacheSeconds = 5) => {
     await ensureSessionSheet();
-    const rows = await DatabaseService.getSheetData(`${SESSION_SHEET}!A:C`, process.env.SPREADSHEET_ID, cacheSeconds);
+    const rows = await DatabaseService.getSheetData(`${SESSION_SHEET}!A:C`, cacheSeconds);
     return findLatest(rows, email)?.version || '0';
 };
 
@@ -37,12 +38,12 @@ const ensureSessionRecord = async (email) => {
     const normalizedEmail = cleanEmail(email);
     if (!normalizedEmail) throw new Error('A student email is required for session tracking.');
     await ensureSessionSheet();
-    const rows = await DatabaseService.getSheetData(`${SESSION_SHEET}!A:C`, process.env.SPREADSHEET_ID, 0);
+    const rows = await DatabaseService.getSheetData(`${SESSION_SHEET}!A:C`, 0);
     const existing = findLatest(rows, normalizedEmail);
     if (existing) return existing;
 
-    await DatabaseService.appendRowRaw(`${SESSION_SHEET}!A:C`, [normalizedEmail, '0', new Date().toISOString()]);
-    const refreshedRows = await DatabaseService.getSheetData(`${SESSION_SHEET}!A:C`, process.env.SPREADSHEET_ID, 0);
+    await DatabaseService.appendRowRaw(`${SESSION_SHEET}!A:C`, [normalizedEmail, '0', formatDateTimeIndia()]);
+    const refreshedRows = await DatabaseService.getSheetData(`${SESSION_SHEET}!A:C`, 0);
     const inserted = findLatest(refreshedRows, normalizedEmail);
     if (!inserted) throw new Error('Could not create the student session record.');
     return inserted;

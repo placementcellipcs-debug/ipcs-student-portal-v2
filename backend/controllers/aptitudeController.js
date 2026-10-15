@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const DatabaseService = require('../services/dbService');
 const { getCourseAccess, courseMatchesAccess } = require('../services/courseService');
+const { formatDateTimeIndia } = require('../utils/portalDateTime');
 
 const examSessions = new Map();
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
@@ -88,9 +89,9 @@ const saveAptitudeResult = async (req, res) => {
         const percentage = totalQuestions ? Math.round((correctCount / totalQuestions) * 100) : 0;
         const elapsed = Math.max(0, Math.min(session.maxDurationSeconds, Math.floor((Date.now() - session.createdAt) / 1000)));
         const timeTaken = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
-        const timestamp = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+        const timestamp = formatDateTimeIndia();
 
-        await DatabaseService.appendRow('Aptitude_Results!A:J', [
+        await DatabaseService.appendRowRaw('Aptitude_Results!A:J', [
             timestamp, student.rollNo, student.name, student.email, student.branch,
             String(score), String(totalQuestions), `${percentage}%`, timeTaken,
             `Reached Level ${finalLevel} (${finalLevel === 1 ? 'Easy' : finalLevel === 2 ? 'Medium' : 'Hard'})`,
@@ -167,7 +168,7 @@ const getSpecificTest = async (req, res) => {
         const [rows, history, courseRows] = await Promise.all([
             DatabaseService.getSheetData(type === 'talentino' ? 'Talentino_Questions!A:K' : 'Tech_Questions!A:K'),
             type === 'talentino' ? DatabaseService.getSheetData('Talentino_Results!A:J') : DatabaseService.getSheetData('Tech_Results!A:J'),
-            type === 'technical' ? DatabaseService.getSheetData('Courses!A:B', process.env.SPREADSHEET_ID, 300) : Promise.resolve([]),
+            type === 'technical' ? DatabaseService.getSheetData('Courses!A:B', 300) : Promise.resolve([]),
         ]);
         const isReview = req.body.isReview === true;
         const hasCompleted = history.slice(1).some((row) => clean(row[3]).toLowerCase() === student.email.toLowerCase()
@@ -231,10 +232,10 @@ const submitSpecificTest = async (req, res) => {
         const percentage = totalQuestions ? Math.round((correctCount / totalQuestions) * 100) : 0;
         const elapsed = Math.max(0, Math.min(session.maxDurationSeconds, Math.floor((Date.now() - session.createdAt) / 1000)));
         const timeTaken = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
-        const timestamp = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+        const timestamp = formatDateTimeIndia();
         const specificCol = session.type === 'talentino' ? `Test ${session.testNum}` : student.course;
         const sheetName = session.type === 'talentino' ? 'Talentino_Results!A:J' : 'Tech_Results!A:J';
-        await DatabaseService.appendRow(sheetName, [
+        await DatabaseService.appendRowRaw(sheetName, [
             timestamp, student.rollNo, student.name, student.email, student.branch, specificCol,
             String(correctCount), String(totalQuestions), `${percentage}%`, timeTaken,
         ]);

@@ -1,4 +1,5 @@
 const DatabaseService = require('../services/dbService');
+const { formatDateTimeIndia } = require('../utils/portalDateTime');
 
 const SHEET_NAME = 'Leave_Applications';
 const SHEET_RANGE = `${SHEET_NAME}!A:K`;
@@ -83,15 +84,14 @@ const submitLeaveRequest = async (req, res) => {
         const student = getStudent(studentRows, email);
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
 
-        const timestamp = new Intl.DateTimeFormat('en-GB', {
-            timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium', hour12: false,
-        }).format(new Date());
+        const timestamp = formatDateTimeIndia();
+        const formatSheetDate = (value) => value.split('-').reverse().join('/');
         const status = type === 'Absence Notice' ? 'Notified' : 'Pending';
-        await DatabaseService.appendRow(SHEET_RANGE, [
+        await DatabaseService.appendRowRaw(SHEET_RANGE, [
             timestamp, student.email, student.name, student.rollNo, student.branch, student.course,
-            startDate, endDate, type, reason, status,
+            formatSheetDate(startDate), formatSheetDate(endDate), type, reason, status,
         ]);
-        return res.status(201).json({ success: true, message: type === 'Absence Notice' ? 'Your absence has been recorded.' : 'Your leave request has been submitted.', record: { startDate, endDate, type, reason, status, timestamp } });
+        return res.status(201).json({ success: true, message: type === 'Absence Notice' ? 'Your absence has been recorded.' : 'Your leave request has been submitted.', record: { startDate: formatSheetDate(startDate), endDate: formatSheetDate(endDate), type, reason, status, timestamp } });
     } catch (error) {
         console.error('Leave request submission error:', error.message);
         return res.status(503).json({ success: false, message: 'Could not save your leave request. Please try again.' });

@@ -1,4 +1,5 @@
 const connectSheet = require('../config/db');
+const spreadsheetConfig = require('../config/spreadsheetConfig');
 const NodeCache = require('node-cache');
 
 const dbCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
@@ -21,8 +22,16 @@ class DatabaseService {
         }
     }
 
-    // Now accepts a specific spreadsheet ID, defaults to the main portal ID
-    static async getSheetData(range, targetSpreadsheetId = process.env.SPREADSHEET_ID, ttlSeconds = 600) {
+    static getSpreadsheetId(sheetOrRange, explicitSpreadsheetId) {
+        return spreadsheetConfig.getSpreadsheetId(sheetOrRange, explicitSpreadsheetId);
+    }
+
+    static async getSheetData(range, targetSpreadsheetId, ttlSeconds = 600) {
+        if (typeof targetSpreadsheetId === 'number') {
+            ttlSeconds = targetSpreadsheetId;
+            targetSpreadsheetId = undefined;
+        }
+        targetSpreadsheetId = this.getSpreadsheetId(range, targetSpreadsheetId);
         const cacheKey = `SHEET_${targetSpreadsheetId}_${range}_${ttlSeconds}`;
         const shouldCache = ttlSeconds > 0;
         let data = shouldCache ? dbCache.get(cacheKey) : null;
@@ -41,7 +50,8 @@ class DatabaseService {
         return data;
     }
 
-    static async appendRow(range, rowData, targetSpreadsheetId = process.env.SPREADSHEET_ID) {
+    static async appendRow(range, rowData, targetSpreadsheetId) {
+        targetSpreadsheetId = this.getSpreadsheetId(range, targetSpreadsheetId);
         const { googleSheets, auth } = await connectSheet();
 
         await this.withRetry(() => googleSheets.spreadsheets.values.append({ 
@@ -49,7 +59,7 @@ class DatabaseService {
             spreadsheetId: targetSpreadsheetId, 
             range, 
             insertDataOption: 'INSERT_ROWS',
-            valueInputOption: "USER_ENTERED", 
+            valueInputOption: 'USER_ENTERED',
             resource: { values: [rowData] } 
         }));
         
@@ -57,7 +67,8 @@ class DatabaseService {
         return true;
     }
 
-    static async appendRowRaw(range, rowData, targetSpreadsheetId = process.env.SPREADSHEET_ID) {
+    static async appendRowRaw(range, rowData, targetSpreadsheetId) {
+        targetSpreadsheetId = this.getSpreadsheetId(range, targetSpreadsheetId);
         const { googleSheets, auth } = await connectSheet();
         const response = await this.withRetry(() => googleSheets.spreadsheets.values.append({
             auth,
@@ -73,8 +84,8 @@ class DatabaseService {
         return updatedRange;
     }
 
-    static async ensureWorksheetWithHeaders(title, headers, targetSpreadsheetId = process.env.SPREADSHEET_ID) {
-        if (!targetSpreadsheetId) throw new Error('SPREADSHEET_ID is not configured.');
+    static async ensureWorksheetWithHeaders(title, headers, targetSpreadsheetId) {
+        targetSpreadsheetId = this.getSpreadsheetId(title, targetSpreadsheetId);
         const { googleSheets, auth } = await connectSheet();
         const getMetadata = () => this.withRetry(() => googleSheets.spreadsheets.get({
             auth,
@@ -128,14 +139,15 @@ class DatabaseService {
     }
 
     // New method to update a specific row (used for GamePal streaks/scores)
-    static async updateRow(range, rowData, targetSpreadsheetId = process.env.SPREADSHEET_ID) {
+    static async updateRow(range, rowData, targetSpreadsheetId) {
+        targetSpreadsheetId = this.getSpreadsheetId(range, targetSpreadsheetId);
         const { googleSheets, auth } = await connectSheet();
 
         await this.withRetry(() => googleSheets.spreadsheets.values.update({ 
             auth, 
             spreadsheetId: targetSpreadsheetId, 
             range, 
-            valueInputOption: "USER_ENTERED", 
+            valueInputOption: 'RAW',
             resource: { values: [rowData] } 
         }));
         
@@ -143,13 +155,21 @@ class DatabaseService {
         return true;
     }
 
-    static async updateRanges(updates, targetSpreadsheetId = process.env.SPREADSHEET_ID) {
+    static async updateRanges(updates, targetSpreadsheetId) {
         const { googleSheets, auth } = await connectSheet();
-        await this.withRetry(() => googleSheets.spreadsheets.values.batchUpdate({
-            auth,
-            spreadsheetId: targetSpreadsheetId,
-            resource: { valueInputOption: 'RAW', data: updates },
-        }));
+        const updatesBySpreadsheet = new Map();
+        for (const update of updates) {
+            const spreadsheetId = this.getSpreadsheetId(update.range, targetSpreadsheetId);
+            if (!updatesBySpreadsheet.has(spreadsheetId)) updatesBySpreadsheet.set(spreadsheetId, []);
+            updatesBySpreadsheet.get(spreadsheetId).push(update);
+        }
+        for (const [spreadsheetId, spreadsheetUpdates] of updatesBySpreadsheet) {
+            await this.withRetry(() => googleSheets.spreadsheets.values.batchUpdate({
+                auth,
+                spreadsheetId,
+                resource: { valueInputOption: 'RAW', data: spreadsheetUpdates },
+            }));
+        }
         dbCache.flushAll();
         return true;
     }

@@ -1,10 +1,11 @@
 const DatabaseService = require('../services/dbService');
 const { normalizeCourse, getCourseAccess, courseMatchesAccess } = require('../services/courseService');
+const crypto = require('crypto');
 
 const getStudentMaterialAccess = async (email) => {
     const [userDataRows, courseRows] = await Promise.all([
-        DatabaseService.getSheetData('Data!A:AE', process.env.SPREADSHEET_ID, 60),
-        DatabaseService.getSheetData('Courses!A:B', process.env.SPREADSHEET_ID, 300)
+        DatabaseService.getSheetData('Data!A:AE', 60),
+        DatabaseService.getSheetData('Courses!A:B', 300)
     ]);
     const student = userDataRows.slice(1).reverse().find((row) => (
         String(row[3] || '').trim().toLowerCase() === String(email || '').trim().toLowerCase()
@@ -24,20 +25,35 @@ const materialMatchesStudent = (materialCourse, courseAccess) => {
     return courseMatchesAccess(materialCourse, courseAccess);
 };
 
-const getActiveMaterial = (row, index) => {
+const getActiveMaterial = (row) => {
     const status = String(row[6] || 'active').trim().toLowerCase();
     if (status.includes('inactive') || status === 'false') return null;
+    const course = String(row[1] || '').trim();
+    const topic = String(row[2] || 'General').trim();
+    const title = String(row[3] || 'Study Material').trim();
+    const fileType = String(row[4] || 'PPTX').trim();
+    const oneDriveLink = String(row[5] || '').trim();
+    if (!course && !oneDriveLink) return null;
+
+    // Material IDs must follow the file/record, not its current sheet row.
+    // Row-based IDs can silently point to a different deck after rows are
+    // inserted, sorted, or reordered between the list and stream requests.
+    const identity = [
+        course.toLowerCase(),
+        topic.toLowerCase(),
+        title.toLowerCase(),
+        fileType.toLowerCase(),
+        oneDriveLink,
+    ].join('\u001f');
+    const id = `MAT-${crypto.createHash('sha256').update(identity).digest('hex').slice(0, 24)}`;
     return {
-        // Column A is a course/group label (for example, "AIDM_Modules"),
-        // repeated for every slide deck. Use the physical sheet row as the
-        // lookup ID so each module resolves to its own OneDrive link.
-        id: `MAT-ROW-${index + 1}`,
+        id,
         materialGroupId: row[0] || '',
-        course: row[1] || '',
-        topic: row[2] || 'General',
-        title: row[3] || 'Study Material',
-        fileType: row[4] || 'PPTX',
-        oneDriveLink: row[5] || ''
+        course,
+        topic,
+        title,
+        fileType,
+        oneDriveLink
     };
 };
 
@@ -49,12 +65,12 @@ const getStudyMaterialsList = async (req, res) => {
             return res.status(403).json({ success: false, message: "Access Restricted: You do not have permission to view Study Materials." });
         }
 
-        const matData = await DatabaseService.getSheetData("Study_Materials!A:G", process.env.SPREADSHEET_ID, 60);
+        // Staff maintain this sheet directly, so don't hold a per-process copy
+        // that can keep showing an old module-to-file mapping after edits.
+        const matData = await DatabaseService.getSheetData("Study_Materials!A:G", 0);
         const materials = matData.slice(1)
-            .map((row, offset) => ({ row, index: offset + 1 }))
-            .filter(({ row }) => materialMatchesStudent(row[1], studentAccess.courses))
-            .map(({ row, index }) => getActiveMaterial(row, index))
-            .filter(Boolean);
+            .map((row) => getActiveMaterial(row))
+            .filter((material) => material && materialMatchesStudent(material.course, studentAccess.courses));
 
         return res.status(200).json({ success: true, materials });
     } catch (error) {
@@ -72,16 +88,17 @@ const streamMaterialPdf = async (req, res) => {
             return res.status(403).json({ success: false, message: "Access Restricted: You do not have permission to view Study Materials." });
         }
 
-        const matData = await DatabaseService.getSheetData("Study_Materials!A:G", process.env.SPREADSHEET_ID, 60);
-        let oneDriveLink = '';
+        const matData = await DatabaseService.getSheetData("Study_Materials!A:G", 0);
+        let selectedMaterial = null;
         for (let i = 1; i < matData.length; i++) {
-            const material = getActiveMaterial(matData[i], i);
+            const material = getActiveMaterial(matData[i]);
             if (material && String(material.id) === String(materialId)
                 && materialMatchesStudent(material.course, studentAccess.courses)) {
-                oneDriveLink = material.oneDriveLink;
+                selectedMaterial = material;
                 break;
             }
         }
+        const oneDriveLink = selectedMaterial?.oneDriveLink || '';
         if (!oneDriveLink || !oneDriveLink.startsWith('http')) {
             return res.status(404).json({ success: false, message: "This material is not available for your course." });
         }
@@ -103,7 +120,11 @@ const streamMaterialPdf = async (req, res) => {
             }
         }
 
-        return res.status(200).json({ success: true, embedUrl });
+        return res.status(200).json({
+            success: true,
+            materialId: selectedMaterial.id,
+            embedUrl,
+        });
     } catch (error) {
         console.error("Material Viewer Error:", error.message);
         return res.status(500).json({ success: false, message: "Failed to process the document link." });

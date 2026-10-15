@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
-import { formatPortalDate } from '../../utils/portalDate';
+import { formatPortalDate, formatPortalTime } from '../../utils/portalDate';
 
 export default function TalentinoAttendance() {
   const { user } = useOutletContext();
@@ -200,11 +200,9 @@ export default function TalentinoAttendance() {
            <div style={{ textAlign: 'center', color: '#64748b', padding: '3rem', background: 'var(--card-bg)', borderRadius: '20px', border: '1px dashed var(--input-border)', fontWeight: 600 }}>No encrypted audit logs found.</div>
          ) : (
            (data.attendanceHistory || []).map((hist, idx) => {
-              const parsedDate = formatPortalDate(hist.dateStr) || hist.dateStr || 'Unknown';
+              const parsedDate = formatPortalDate(hist.dateStr) || 'Date unavailable';
 
-              const rawTimestamp = String(hist.timestamp || '');
-              const timeMatch = rawTimestamp.match(/\d{1,2}:\d{2}:\d{2}\s?(AM|PM|am|pm)/);
-              const parsedTime = timeMatch ? timeMatch[0] : rawTimestamp.split(' ')[1] || '';
+              const parsedTime = formatPortalTime(hist.timestamp) || 'Time unavailable';
               
               let statusText = hist.rating >= 4 ? 'Optimal' : (hist.rating === 3 ? 'Standard' : 'Sub-Optimal');
 

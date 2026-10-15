@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
 import ModalPortal from '../../components/ui/ModalPortal';
@@ -13,6 +13,7 @@ export default function StudyMaterials() {
   const [materialModal, setMaterialModal] = useState(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
   const [isPdfLoading, setIsPdfLoading] = useState(false);
+  const viewerRequestId = useRef(0);
 
   useEffect(() => {
     if (!user?.email) return undefined;
@@ -43,6 +44,8 @@ export default function StudyMaterials() {
 
   const handleViewMaterial = async (mat) => {
     if (!user || !user.email) return;
+    const requestId = viewerRequestId.current + 1;
+    viewerRequestId.current = requestId;
     setMaterialModal(mat);
     setIsPdfLoading(true);
     setPdfBlobUrl(null);
@@ -50,13 +53,15 @@ export default function StudyMaterials() {
     try {
         const res = await api.post('/api/dashboard/study-materials/stream', { materialId: mat.id });
         
-        if (res.data.success && res.data.embedUrl) {
+        if (requestId !== viewerRequestId.current) return;
+        if (res.data.success && res.data.embedUrl && res.data.materialId === mat.id) {
             setPdfBlobUrl(res.data.embedUrl);
             setIsPdfLoading(false);
         } else {
-            throw new Error(res.data.message || "Failed to load secure link.");
+            throw new Error(res.data.message || 'The server returned a different study material. Please refresh and try again.');
         }
     } catch (err) {
+        if (requestId !== viewerRequestId.current) return;
         console.error('Failed to load study material:', err);
         setIsPdfLoading(false);
         setMaterialModal({ ...mat, error: 'Failed to load document securely.' });
@@ -64,8 +69,10 @@ export default function StudyMaterials() {
   };
 
   const closeMaterialModal = () => {
+    viewerRequestId.current += 1;
     setMaterialModal(null);
     setPdfBlobUrl(null);
+    setIsPdfLoading(false);
   };
 
   return (
@@ -159,6 +166,7 @@ export default function StudyMaterials() {
 
               {pdfBlobUrl && !isPdfLoading && (
                 <iframe
+                  key={`${materialModal.id}:${pdfBlobUrl}`}
                   src={pdfBlobUrl}
                   title={materialModal.title}
                   style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', zIndex: 1, backgroundColor: '#ffffff' }}

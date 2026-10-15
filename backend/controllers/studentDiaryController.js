@@ -1,4 +1,5 @@
 const DatabaseService = require('../services/dbService');
+const { formatDateIndia, formatDateTimeIndia } = require('../utils/portalDateTime');
 
 const GEOFENCE_RADIUS_METERS = 1000;
 const SHEET_RANGE = 'Student_Diary!A:O';
@@ -29,9 +30,7 @@ const getTodayInIndia = (date = new Date()) => {
     return `${value.year}-${value.month}-${value.day}`;
 };
 
-const getTimestampInIndia = (date = new Date()) => new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium', hour12: false
-}).format(date);
+const getTimestampInIndia = (date = new Date()) => formatDateTimeIndia(date);
 
 const hasSessionToday = (scheduleRows, branch, today) => scheduleRows.slice(1).some((row) => (
     String(row[2] || '').split(/[,;|]/).map((value) => value.trim().toLowerCase()).includes(String(branch || '').trim().toLowerCase())
@@ -120,7 +119,7 @@ const buildDiary = (rows, student, email) => {
 
     return {
         student,
-        today,
+        today: formatDateIndia(),
         attendanceRecords,
         hasMarkedToday,
         syllabus: {
@@ -204,8 +203,8 @@ const markStudentAttendance = async (req, res) => {
         }
 
         const timestamp = getTimestampInIndia();
-        const date = today;
-        await DatabaseService.appendRow(SHEET_RANGE, [
+        const date = formatDateIndia();
+        await DatabaseService.appendRowRaw(SHEET_RANGE, [
             timestamp, email, student.name, student.rollNo, student.branch, student.course,
             date, 'ATTENDANCE', 'Present', '', '', '', lat, lng, Math.round(distance),
         ]);

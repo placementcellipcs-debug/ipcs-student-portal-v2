@@ -1,10 +1,4 @@
 const WORKBOOK_ENV_BY_SHEET = new Map();
-const DEFAULT_WORKBOOK_IDS = {
-    STUDENT_DATA_SPREADSHEET_ID: '14WvBO50cY66NLQVQXs1OrR-jcOD6AQSKz9Yya60KG3o',
-    PLACEMENT_SPREADSHEET_ID: '1eSMP6u8G11ErXOYS1XTU0qR4RvyCNcFQtP19dHkNz5c',
-    LEARNING_SPREADSHEET_ID: '18alS1bVj33kZ8wX7VcQiwrPzLSfOyQWkc8fRooTD7Nk',
-    OPERATIONS_SPREADSHEET_ID: '1qLS3e0xJX0IVhNoGFGM8uPtet7mxI6QHzpz-AwfoBnI',
-};
 const registerSheets = (envName, sheetNames) => {
     for (const sheetName of sheetNames) {
         WORKBOOK_ENV_BY_SHEET.set(normalizeSheetName(sheetName), envName);
@@ -81,7 +75,9 @@ const getSpreadsheetId = (sheetOrRange, explicitSpreadsheetId) => {
     }
     if (!envName) throw new Error(`No spreadsheet is configured for the ${sheetName || 'requested'} worksheet.`);
 
-    const workbookId = process.env[envName] || DEFAULT_WORKBOOK_IDS[envName];
+    // Never silently fall back to a production workbook. Render, Hostinger,
+    // and local development must each explicitly select their storage targets.
+    const workbookId = String(process.env[envName] || '').trim();
     if (!workbookId) throw new Error(`${envName} is not configured for the ${sheetName} worksheet.`);
     if (explicitSpreadsheetId && explicitSpreadsheetId !== workbookId) {
         throw new Error(`The ${sheetName} worksheet must use its assigned ${envName} workbook.`);
@@ -89,6 +85,12 @@ const getSpreadsheetId = (sheetOrRange, explicitSpreadsheetId) => {
     return workbookId;
 };
 
-const hasSpreadsheetId = (sheetOrRange) => Boolean(getSpreadsheetId(sheetOrRange));
+const hasSpreadsheetId = (sheetOrRange) => {
+    try {
+        return Boolean(getSpreadsheetId(sheetOrRange));
+    } catch {
+        return false;
+    }
+};
 
 module.exports = { getSpreadsheetId, hasSpreadsheetId };

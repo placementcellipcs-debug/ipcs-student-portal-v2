@@ -64,7 +64,7 @@ export default function StudyMaterials() {
         if (requestId !== viewerRequestId.current) return;
         console.error('Failed to load study material:', err);
         setIsPdfLoading(false);
-        setMaterialModal({ ...mat, error: 'Failed to load document securely.' });
+        setMaterialModal({ ...mat, error: err.response?.data?.message || err.message || 'Failed to load document securely.' });
     }
   };
 
@@ -102,7 +102,7 @@ export default function StudyMaterials() {
           {materials.map((mat) => {
             const isPdf = mat.fileType.toLowerCase().includes('pdf');
             return (
-              <button type="button" key={mat.id} className="resume-card material-card" onClick={() => handleViewMaterial(mat)}>
+              <button type="button" key={mat.id} className="resume-card material-card" onClick={() => handleViewMaterial(mat)} disabled={mat.sourceConflict} aria-describedby={mat.sourceConflict ? `material-warning-${mat.id}` : undefined} style={mat.sourceConflict ? { opacity: 0.78, cursor: 'not-allowed', borderColor: 'rgba(251,191,36,.55)' } : undefined}>
                 <div className="resume-icon-box" style={{ background: isPdf ? 'rgba(239, 68, 68, 0.15)' : 'rgba(56, 189, 248, 0.15)', color: isPdf ? '#ef4444' : '#38bdf8' }}>
                   <i className={`ph-fill ${isPdf ? 'ph-file-pdf' : 'ph-presentation'}`}></i>
                 </div>
@@ -116,8 +116,13 @@ export default function StudyMaterials() {
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>
                     Format: {mat.fileType}
                   </span>
+                  {mat.sourceConflict && (
+                    <span id={`material-warning-${mat.id}`} style={{ display: 'block', marginTop: '8px', color: '#fbbf24', fontSize: '0.78rem', fontWeight: 700, lineHeight: 1.4 }}>
+                      <i className="ph-fill ph-warning-circle" aria-hidden="true" /> This file is also assigned to another module. Please ask IPCS to review the Study_Materials link.
+                    </span>
+                  )}
                 </div>
-                <span className="btn-action" style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem', borderRadius: '8px' }}>View</span>
+                <span className="btn-action" style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem', borderRadius: '8px' }}>{mat.sourceConflict ? 'Link review needed' : 'View'}</span>
               </button>
             );
           })}
@@ -150,6 +155,12 @@ export default function StudyMaterials() {
 
             {/* Modal Body / Iframe */}
             <div className="material-iframe-container">
+              {materialModal.sourceConflict && !materialModal.error && (
+                <div className="alert alert-error" role="status" style={{ margin: '14px', position: 'relative', zIndex: 20, padding: '1rem', borderRadius: '12px' }}>
+                  <i className="ph-fill ph-warning-circle" aria-hidden="true" style={{ marginRight: '8px' }} />
+                  This source file is assigned to multiple modules. If the slides do not match this topic, IPCS needs to correct its Study_Materials link.
+                </div>
+              )}
               {isPdfLoading && (
                 <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: 'var(--accent-cyan)', zIndex: 20 }}>
                   <i className="ph ph-spinner animate-spin" style={{ fontSize: '3rem', marginBottom: '15px' }}></i>

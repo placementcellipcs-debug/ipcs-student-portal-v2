@@ -229,25 +229,35 @@ const loginUser = async (req, res) => {
             return res.status(503).json({ success: false, message: 'Student login is temporarily unavailable. Please contact IPCS support.' });
         }
 
-        // Always read current records so new registrations and admin changes are visible immediately.
-        const rows = await DatabaseService.getSheetData('Data!A:AG', 0);
+        // Keep the login scan narrow: name, phone, email, and password are enough
+        // to locate and authenticate a record. Fetch the full profile only after
+        // a matching credential is found.
+        const rows = await DatabaseService.getSheetData('Data!A:E', 0);
         let userObj = null;
         let emailExists = false;
 
         for (let i = rows.length - 1; i > 0; i--) {
-            const row = rows[i] || [];
-            if (String(row[3] || '').trim().toLowerCase() === email) {
+            const credentialRow = rows[i] || [];
+            if (String(credentialRow[3] || '').trim().toLowerCase() === email) {
                 emailExists = true;
                 let isMatch = false;
                 
                 // Check password (supports both plain text for old data and bcrypt for new data)
-                if (String(row[4] || '') === password) {
+                if (String(credentialRow[4] || '') === password) {
                     isMatch = true;
                 } else { 
-                    try { isMatch = await bcrypt.compare(password, String(row[4] || '')); } catch(e) {} 
+                    try { isMatch = await bcrypt.compare(password, String(credentialRow[4] || '')); } catch(e) {}
                 }
 
                 if (isMatch) {
+                    const rowNumber = i + 1;
+                    const fullRows = await DatabaseService.getSheetData(`Data!A${rowNumber}:AG${rowNumber}`, 0);
+                    const row = fullRows[0] || [];
+                    // A sheet row may be sorted or edited between the two reads.
+                    // Never issue a session using a different student's profile.
+                    if (String(row[3] || '').trim().toLowerCase() !== email) {
+                        return res.status(503).json({ success: false, code: 'STUDENT_RECORD_CHANGED', message: 'Your student record changed while signing in. Please retry.' });
+                    }
                     userObj = {
                         name: row[1] || "Student", phone: row[2] || "N/A", email: row[3], rollNo: row[5] || "N/A",
                         joiningDate: row[6] || "N/A", course: row[7] || "N/A", branch: row[8] || "Bangalore",
@@ -301,14 +311,14 @@ const registerUser = async (req, res) => {
             return res.status(503).json({ success: false, message: 'Registration is temporarily unavailable. Please contact IPCS support.' });
         }
 
-        // Do not use the normal 10-minute sheet cache for account creation.
-        const rows = await DatabaseService.getSheetData('Data!A:AG', 0);
-        const headers = rows[0] || [];
+        // Read only the email column for duplicate detection; avoid loading the
+        // entire student database for every signup request.
+        const emailRows = await DatabaseService.getSheetData('Data!D:D', 0);
 
         // Check if user already exists
-        for (let i = rows.length - 1; i >= 1; i--) {
-            const existingEmail = DatabaseService.getVal(rows[i], headers, ["email", "mail"], 3, "");
-            if (existingEmail && existingEmail.toLowerCase() === cleanEmail) {
+        for (let i = emailRows.length - 1; i >= 1; i--) {
+            const existingEmail = String(emailRows[i]?.[0] || '').trim().toLowerCase();
+            if (existingEmail === cleanEmail) {
                 return res.status(400).json({ success: false, message: "An account with this email already exists." });
             }
         }

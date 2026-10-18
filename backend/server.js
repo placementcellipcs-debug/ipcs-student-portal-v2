@@ -7,6 +7,18 @@ const connectSheet = require('./config/db');
 dotenv.config();
 
 const app = express();
+const requiredWorkbookEnv = [
+  'STUDENT_DATA_SPREADSHEET_ID',
+  'PLACEMENT_SPREADSHEET_ID',
+  'LEARNING_SPREADSHEET_ID',
+  'OPERATIONS_SPREADSHEET_ID',
+];
+const missingWorkbookEnv = requiredWorkbookEnv.filter((name) => !String(process.env[name] || '').trim());
+if (missingWorkbookEnv.length) {
+  console.error(`[startup] Missing spreadsheet routing variables: ${missingWorkbookEnv.join(', ')}`);
+} else {
+  console.info('[startup] All four spreadsheet routing variables are configured.');
+}
 
 // Configure CORS for the production portal and local/native development.
 const allowedOrigins = [...new Set([
@@ -15,6 +27,7 @@ const allowedOrigins = [...new Set([
   'http://localhost:5173',
   'http://localhost:3000',
   'https://ipcstalenzo.com',
+  'https://www.ipcstalenzo.com',
   'https://ipcs-student-portal-v2.vercel.app', // Vercel test frontend uses the Render API.
   'capacitor://localhost',                     // Native Mobile Fallback
   'ionic://localhost'

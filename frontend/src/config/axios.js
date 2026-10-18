@@ -2,6 +2,9 @@ import axios from 'axios';
 
 const MAIN_API_URL = 'https://api.ipcstalenzo.com';
 const RENDER_TEST_API_URL = 'https://ipcs-student-portal-v2.onrender.com';
+const CONFIGURED_API_URL = import.meta.env.VITE_API_BASE
+  || import.meta.env.VITE_BACKEND_URL
+  || import.meta.env.VITE_API_URL;
 const pageHost = typeof window === 'undefined' ? '' : window.location.hostname.toLowerCase();
 const isMainPortal = pageHost === 'ipcstalenzo.com' || pageHost === 'www.ipcstalenzo.com';
 const isVercelTestPortal = pageHost.endsWith('.vercel.app');
@@ -9,11 +12,10 @@ const isVercelTestPortal = pageHost.endsWith('.vercel.app');
 // Keep the public portal on the Hostinger API while Vercel deployments remain
 // pointed at Render for testing. Local dev uses its configured API URL.
 const API_BASE_URL = isMainPortal
-  ? MAIN_API_URL
+  ? (CONFIGURED_API_URL || MAIN_API_URL)
   : isVercelTestPortal
     ? RENDER_TEST_API_URL
-    : import.meta.env.VITE_BACKEND_URL
-      || import.meta.env.VITE_API_URL
+    : CONFIGURED_API_URL
       || (import.meta.env.PROD ? MAIN_API_URL : 'http://localhost:5000');
 
 const api = axios.create({

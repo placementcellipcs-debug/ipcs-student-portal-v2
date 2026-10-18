@@ -25,6 +25,53 @@ const materialMatchesStudent = (materialCourse, courseAccess) => {
     return courseMatchesAccess(materialCourse, courseAccess);
 };
 
+const getSourceIdentity = (link) => {
+    try {
+        const url = new URL(String(link || '').trim());
+        const host = url.hostname.toLowerCase();
+        const path = decodeURIComponent(url.pathname).replace(/\/+$/, '').toLowerCase();
+
+        if (host === 'drive.google.com' || host === 'docs.google.com') {
+            const fileId = url.searchParams.get('id') || path.match(/\/(?:d|presentation\/d)\/([\w-]+)/)?.[1];
+            if (fileId) return `google:${fileId}`;
+        }
+
+        if (host.includes('sharepoint.com') || host.includes('onedrive.live.com')) {
+            const fileId = url.searchParams.get('sourcedoc')
+                || url.searchParams.get('resid')
+                || url.searchParams.get('id');
+            if (fileId) return `microsoft:${fileId.replace(/[{}]/g, '').toLowerCase()}`;
+            // Share links commonly carry an opaque file key in the path and a
+            // short-lived access token in the `e` query parameter. Compare the
+            // stable path, not the sharing token or embed action.
+            return `microsoft:${host}${path}`;
+        }
+
+        return `${host}${path}`;
+    } catch {
+        return String(link || '').trim().toLowerCase();
+    }
+};
+
+const markDuplicateSources = (materials) => {
+    const sourceGroups = new Map();
+    for (const material of materials) {
+        if (!material.oneDriveLink) continue;
+        const sourceId = getSourceIdentity(material.oneDriveLink);
+        if (!sourceGroups.has(sourceId)) sourceGroups.set(sourceId, []);
+        sourceGroups.get(sourceId).push(material);
+    }
+
+    return materials.map((material) => {
+        const sourceId = getSourceIdentity(material.oneDriveLink);
+        const sourceGroup = sourceGroups.get(sourceId) || [];
+        const otherSourceRows = [...new Set(sourceGroup
+            .filter((other) => other.id !== material.id)
+            .map((other) => `${other.course}\u001f${other.topic}\u001f${other.title}`))];
+        return { ...material, sourceConflict: otherSourceRows.length > 0 };
+    });
+};
+
 const getActiveMaterial = (row) => {
     const status = String(row[6] || 'active').trim().toLowerCase();
     if (status.includes('inactive') || status === 'false') return null;
@@ -68,9 +115,11 @@ const getStudyMaterialsList = async (req, res) => {
         // Staff maintain this sheet directly, so don't hold a per-process copy
         // that can keep showing an old module-to-file mapping after edits.
         const matData = await DatabaseService.getSheetData("Study_Materials!A:G", 0);
-        const materials = matData.slice(1)
+        const allActiveMaterials = matData.slice(1)
             .map((row) => getActiveMaterial(row))
-            .filter((material) => material && materialMatchesStudent(material.course, studentAccess.courses));
+            .filter(Boolean);
+        const materials = markDuplicateSources(allActiveMaterials)
+            .filter((material) => materialMatchesStudent(material.course, studentAccess.courses));
 
         return res.status(200).json({ success: true, materials });
     } catch (error) {
@@ -89,14 +138,17 @@ const streamMaterialPdf = async (req, res) => {
         }
 
         const matData = await DatabaseService.getSheetData("Study_Materials!A:G", 0);
-        let selectedMaterial = null;
-        for (let i = 1; i < matData.length; i++) {
-            const material = getActiveMaterial(matData[i]);
-            if (material && String(material.id) === String(materialId)
-                && materialMatchesStudent(material.course, studentAccess.courses)) {
-                selectedMaterial = material;
-                break;
-            }
+        const allActiveMaterials = matData.slice(1).map(getActiveMaterial).filter(Boolean);
+        const selectedMaterial = markDuplicateSources(allActiveMaterials).find((material) => (
+            String(material.id) === String(materialId)
+            && materialMatchesStudent(material.course, studentAccess.courses)
+        ));
+        if (selectedMaterial?.sourceConflict) {
+            return res.status(409).json({
+                success: false,
+                code: 'DUPLICATE_MATERIAL_SOURCE',
+                message: 'This file link is also assigned to another module. IPCS needs to correct the Study_Materials link before it can be opened here.',
+            });
         }
         const oneDriveLink = selectedMaterial?.oneDriveLink || '';
         if (!oneDriveLink || !oneDriveLink.startsWith('http')) {
@@ -131,4 +183,4 @@ const streamMaterialPdf = async (req, res) => {
     }
 };
 
-module.exports = { getStudyMaterialsList, streamMaterialPdf };
+module.exports = { getStudyMaterialsList, streamMaterialPdf, getSourceIdentity, markDuplicateSources };

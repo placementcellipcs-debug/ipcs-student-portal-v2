@@ -26,6 +26,10 @@ class DatabaseService {
         return spreadsheetConfig.getSpreadsheetId(sheetOrRange, explicitSpreadsheetId);
     }
 
+    static hasSpreadsheetId(sheetOrRange) {
+        return spreadsheetConfig.hasSpreadsheetId(sheetOrRange);
+    }
+
     static async getSheetData(range, targetSpreadsheetId, ttlSeconds = 600) {
         if (typeof targetSpreadsheetId === 'number') {
             ttlSeconds = targetSpreadsheetId;

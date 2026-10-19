@@ -47,6 +47,9 @@ export default function DashboardHome() {
   const vacancyAccess = dashboardData
     ? Boolean(dashboardData.vacancyAccess)
     : /^(yes|true|1)$/i.test(String(user?.vacancyOpen || ''));
+  const activeVacancyCount = Array.isArray(dashboardData?.vacancies)
+    ? dashboardData.vacancies.filter((vacancy) => !isEventPast(vacancy.lastDate, undefined, clockNow)).length
+    : 0;
 
   let workoutPlanned = 3;
   let workoutCompleted = 0;
@@ -103,7 +106,7 @@ export default function DashboardHome() {
         <span className="dashboard-vacancy-copy">
           <strong>Latest placement openings</strong>
           <small>{vacancyAccess
-            ? dashboardData ? `${dashboardData.vacancies?.length || 0} active openings matched to your course` : 'Explore active openings matched to your course'
+            ? dashboardData ? `${activeVacancyCount} active openings matched to your course` : 'Explore active openings matched to your course'
             : 'Check your opening access or contact the placement team'}</small>
         </span>
         <span className="dashboard-vacancy-action">View openings <i className="ph ph-arrow-right"></i></span>

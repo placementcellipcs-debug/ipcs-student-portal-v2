@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const { pipeline } = require('node:stream/promises');
 const { createEmailTransport, getEmailFrom } = require('../services/emailTransport');
 const { requiresPriorExperience } = require('../utils/jobEligibility');
+const { getCourseAccess, courseMatchesAccess } = require('../services/courseService');
 const { formatDateIndia, formatTimeIndia, formatDateTimeIndia, formatDateInputIndia } = require('../utils/portalDateTime');
 
 // Helpers
@@ -102,6 +103,24 @@ const isEventPast = (dateValue, timeValue, now = new Date()) => {
 
 const getCol = (row, idx, fallback = "") => (row && row[idx] !== undefined && row[idx] !== null) ? row[idx].toString().trim() : fallback;
 const normalize = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const getEventCourse = (eventRows, row) => {
+    const courseColumn = (eventRows?.[0] || []).findIndex((header) => normalize(header) === 'course');
+    return courseColumn < 0 ? '' : getCol(row, courseColumn);
+};
+const driveMatchesCourse = (eventRows, row, studentCourseAccess) => {
+    const eventCourse = getEventCourse(eventRows, row);
+    // Blank Course cells stay hidden. "All Courses" explicitly enables a broad drive.
+    return Boolean(eventCourse) && courseMatchesAccess(eventCourse, studentCourseAccess, { allowAll: true });
+};
+const getStudentCourseAccess = async (course) => {
+    try {
+        return getCourseAccess(course, await DatabaseService.getSheetData('Courses!A:B'));
+    } catch (error) {
+        // Retain exact-course matching if course-group metadata is temporarily unavailable.
+        console.warn('Could not load course groups for drive filtering:', error.message);
+        return getCourseAccess(course, []);
+    }
+};
 const normalizeBranch = (value) => normalize(value).replace(/\s+branch(?:\s+campus)?$/i, '').trim();
 const branchMatches = (assignedBranches, studentBranch) => {
     const student = normalizeBranch(studentBranch);
@@ -134,7 +153,7 @@ const getDashboardData = async (req, res) => {
             buildCourseMap(),
             DatabaseService.getSheetData("Data!A:AG"),
             DatabaseService.getSheetData("Opening_Applied!A:O"),
-            DatabaseService.getSheetData("Event!A:K"),
+            DatabaseService.getSheetData("Event!A:U"),
             DatabaseService.getSheetData("Drive_Registration!A:J"),
             DatabaseService.getSheetData("Talentino_Schedule!A:D"),
             DatabaseService.getSheetData("Talentino_Attendance!A:J"),
@@ -161,6 +180,7 @@ const getDashboardData = async (req, res) => {
 
         if (!userInfo.email) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
         const actualBranch = normalize(userInfo.branch);
+        const studentCourseAccess = await getStudentCourseAccess(userInfo.course);
         const vacancyAccess = /^(yes|true|1)$/i.test(String(userInfo.vacancyOpen || 'No').trim());
 
         // Process Applied Jobs
@@ -183,10 +203,13 @@ const getDashboardData = async (req, res) => {
         // Process Events
         let events = [];
         for (let i = 1; i < evData.length; i++) {
-            const evBranch = evData[i][2] || 'All';
-            if (branchMatches(evBranch, actualBranch)) {
-                events.push({ date: evData[i][0] || "TBA", branch: evData[i][2] || "All", type: evData[i][3] || "GENERAL", title: evData[i][4] || "Event", description: evData[i][5] || "", time: evData[i][6] || "", location: evData[i][7] || "", posterLink: evData[i][8] || "", id: evData[i][9] || `DRK-${1000 + i}` });
+            const isPlacementDrive = /placement drive/i.test(getCol(evData[i], 3));
+            if (isPlacementDrive) {
+                if (!driveMatchesCourse(evData, evData[i], studentCourseAccess)) continue;
+            } else if (!branchMatches(evData[i][2] || 'All', actualBranch)) {
+                continue;
             }
+            events.push({ date: evData[i][0] || "TBA", branch: evData[i][2] || "All", type: evData[i][3] || "GENERAL", title: evData[i][4] || "Event", description: evData[i][5] || "", time: evData[i][6] || "", location: evData[i][7] || "", posterLink: evData[i][8] || "", id: evData[i][9] || `DRK-${1000 + i}` });
         }
 
         // Process Drive RSVPs
@@ -274,15 +297,16 @@ const getDriveAlerts = async (req, res) => {
         const student = await findStudent(email);
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
         const [eventRows, responseRows] = await Promise.all([
-            DatabaseService.getSheetData('Event!A:K', 10),
+            DatabaseService.getSheetData('Event!A:U', 10),
             DatabaseService.getSheetData('Drive_Registration!A:J', 10),
         ]);
+        const studentCourseAccess = await getStudentCourseAccess(student.course);
         const drives = [];
         for (let index = 1; index < eventRows.length; index++) {
             const row = eventRows[index];
             const type = getCol(row, 3).toLowerCase();
             const date = parseDateKey(getCol(row, 0));
-            if (!type.includes('placement drive') || !date || isEventPast(getCol(row, 0), getCol(row, 6)) || !branchMatches(getCol(row, 2, 'All'), student.branch)) continue;
+            if (!type.includes('placement drive') || !date || isEventPast(getCol(row, 0), getCol(row, 6)) || !driveMatchesCourse(eventRows, row, studentCourseAccess)) continue;
             drives.push({
                 date: row[0] || 'TBA', branch: row[2] || 'All', type: row[3] || 'PLACEMENT DRIVE',
                 title: row[4] || 'Placement Drive', description: row[5] || '', time: row[6] || '',
@@ -725,7 +749,7 @@ const submitDriveResponse = async (req, res) => {
 
         const [rows, eventRows, contacts] = await Promise.all([
             DatabaseService.getSheetData("Drive_Registration!A:D"),
-            DatabaseService.getSheetData("Event!A:K", 60),
+            DatabaseService.getSheetData("Event!A:U", 60),
             DatabaseService.getSheetData("Contact!A:H"),
         ]);
         const event = eventRows.slice(1).find((row, index) => {
@@ -733,7 +757,8 @@ const submitDriveResponse = async (req, res) => {
             return id === String(targetDriveId) && /placement drive/i.test(getCol(row, 3));
         });
         if (!event) return res.status(404).json({ success: false, message: 'This placement drive is no longer available.' });
-        if (!branchMatches(getCol(event, 2, 'All'), student.branch)) return res.status(403).json({ success: false, message: 'This drive is not assigned to your branch.' });
+        const studentCourseAccess = await getStudentCourseAccess(student.course);
+        if (!driveMatchesCourse(eventRows, event, studentCourseAccess)) return res.status(403).json({ success: false, message: 'This drive is not assigned to your course.' });
         if (isEventPast(getCol(event, 0), getCol(event, 6))) return res.status(400).json({ success: false, message: 'This placement drive has already passed.' });
         for (let i = 1; i < rows.length; i++) {
             if (rows[i][0] === targetDriveId && normalize(rows[i][3]) === email) {

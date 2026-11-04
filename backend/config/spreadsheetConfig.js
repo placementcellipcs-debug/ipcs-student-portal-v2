@@ -68,11 +68,13 @@ const getSpreadsheetId = (sheetOrRange, explicitSpreadsheetId) => {
     const range = String(sheetOrRange || '');
     const sheetName = range.split('!')[0];
     const normalizedName = normalizeSheetName(sheetName);
-    let envName = WORKBOOK_ENV_BY_SHEET.get(normalizedName);
-    // GamePal and supporting audit worksheets are part of the Learning workbook.
-    if (!envName && (normalizedName.startsWith('gamepal') || normalizedName.includes('audit'))) {
-        envName = 'LEARNING_SPREADSHEET_ID';
-    }
+    // GamePal intentionally uses its own workbook, separate from the four
+    // portal ecosystem workbooks. All of its tabs share this dedicated ID.
+    let envName = normalizedName.startsWith('gamepal')
+        ? 'GAMEPAL_SPREADSHEET_ID'
+        : WORKBOOK_ENV_BY_SHEET.get(normalizedName);
+    // Supporting audit worksheets remain part of Learning & Academics.
+    if (!envName && normalizedName.includes('audit')) envName = 'LEARNING_SPREADSHEET_ID';
     if (!envName) throw new Error(`No spreadsheet is configured for the ${sheetName || 'requested'} worksheet.`);
 
     // Never silently fall back to a production workbook. Render, Hostinger,

@@ -12,12 +12,13 @@ const requiredWorkbookEnv = [
   'PLACEMENT_SPREADSHEET_ID',
   'LEARNING_SPREADSHEET_ID',
   'OPERATIONS_SPREADSHEET_ID',
+  'GAMEPAL_SPREADSHEET_ID',
 ];
 const missingWorkbookEnv = requiredWorkbookEnv.filter((name) => !String(process.env[name] || '').trim());
 if (missingWorkbookEnv.length) {
   console.error(`[startup] Missing spreadsheet routing variables: ${missingWorkbookEnv.join(', ')}`);
 } else {
-  console.info('[startup] All four spreadsheet routing variables are configured.');
+  console.info('[startup] All five spreadsheet routing variables are configured.');
 }
 
 // Configure CORS for the production portal and local/native development.

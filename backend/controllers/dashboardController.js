@@ -103,6 +103,48 @@ const isEventPast = (dateValue, timeValue, now = new Date()) => {
 
 const getCol = (row, idx, fallback = "") => (row && row[idx] !== undefined && row[idx] !== null) ? row[idx].toString().trim() : fallback;
 const normalize = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const normalizeSheetHeader = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+const getNewsletterColumns = (headerRow = []) => {
+    const findColumn = (aliases, fallback) => {
+        const normalizedAliases = new Set(aliases.map(normalizeSheetHeader));
+        const headerIndex = headerRow.findIndex((header) => normalizedAliases.has(normalizeSheetHeader(header)));
+        return { index: headerIndex >= 0 ? headerIndex : fallback, hasHeader: headerIndex >= 0 };
+    };
+    const column = (aliases, fallback) => findColumn(aliases, fallback).index;
+    const jobId = findColumn(['jobid', 'jobidentifier', 'openingid', 'id'], 19);
+
+    return {
+        date: column(['date', 'posteddate', 'dateposted'], 1),
+        company: column(['companyname', 'company'], 2),
+        companyLogo: column(['companylogo', 'companylogourl', 'logo', 'logourl'], 22),
+        course: column(['course', 'program'], 4),
+        position: column(['position', 'role', 'jobtitle'], 5),
+        state: column(['state', 'region'], 6),
+        location: column(['openingatlocation', 'location', 'city'], 7),
+        modeOfWork: column(['workmode', 'modeofwork', 'mode'], 8),
+        openings: column(['noofopenings', 'numberofopenings', 'openings'], 9),
+        qualification: column(['qualification', 'educationalqualification', 'eligibility'], 10),
+        description: column(['jobdescription', 'description', 'roleoverview'], 11),
+        experience: column(['experience', 'yearsofexperience'], 12),
+        salary: column(['salary', 'package', 'ctc', 'compensation'], 13),
+        interviewDate: column(['interviewdate'], 15),
+        lastDate: column(['lastdate', 'applicationdeadline', 'applyby'], 16),
+        placementOfficer: column(['placementofficer', 'tpo', 'tponame'], 17),
+        status: column(['status', 'openingstatus'], 18),
+        jobId: jobId.index,
+        jobIdHasHeader: jobId.hasHeader,
+    };
+};
+const getNewsletterCell = (row, columns, key, fallback = '') => getCol(row, columns[key], fallback);
+const getNewsletterJobId = (row, columns, rowIndex) => {
+    const savedId = getNewsletterCell(row, columns, 'jobId').trim();
+    if (savedId) return savedId;
+    if (!columns.jobIdHasHeader) {
+        const legacyId = getCol(row, 19, '').trim() || getCol(row, 20, '').trim();
+        if (legacyId) return legacyId;
+    }
+    return `JOB-${1000 + rowIndex}`;
+};
 const getEventCourse = (eventRows, row) => {
     const courseColumn = (eventRows?.[0] || []).findIndex((header) => normalize(header) === 'course');
     return courseColumn < 0 ? '' : getCol(row, courseColumn);
@@ -157,7 +199,7 @@ const getDashboardData = async (req, res) => {
             DatabaseService.getSheetData("Drive_Registration!A:J"),
             DatabaseService.getSheetData("Talentino_Schedule!A:D"),
             DatabaseService.getSheetData("Talentino_Attendance!A:J"),
-            DatabaseService.getSheetData("NewsLetter!A:W"),
+            DatabaseService.getSheetData("NewsLetter!A:X", undefined, 60),
             DatabaseService.getSheetData("Contact!A:H")
         ]);
 
@@ -250,13 +292,12 @@ const getDashboardData = async (req, res) => {
         let vacancies = [];
         const cleanStudentSubcourse = (userInfo.course || "").trim().toLowerCase();
         const studentMainCourse = courseMap[cleanStudentSubcourse] || cleanStudentSubcourse;
-        const newsletterHeaders = (nlData[0] || []).map((header) => normalize(header));
-        const logoColumn = newsletterHeaders.findIndex((header) => /^(company\s*)?logo(\s*(url|link))?$/.test(header));
+        const newsletterColumns = getNewsletterColumns(nlData[0] || []);
 
         for (let i = 1; vacancyAccess && i < nlData.length; i++) {
-            let status = (nlData[i][18] || "yes").toLowerCase();
+            const status = normalize(getNewsletterCell(nlData[i], newsletterColumns, 'status', 'yes') || 'yes');
             if (status.includes("no") || status.includes("closed") || status === "false") continue;
-            let rowCourse = (nlData[i][4] || "all").toLowerCase();
+            const rowCourse = normalize(getNewsletterCell(nlData[i], newsletterColumns, 'course', 'all') || 'all');
             let isCourseMatch = false;
 
             if (rowCourse.includes("all") || rowCourse === "") isCourseMatch = true;
@@ -267,12 +308,27 @@ const getDashboardData = async (req, res) => {
             
             // Do not turn blank / partially filled NewsLetter rows into fake
             // openings by filling both fields with display defaults below.
-            const company = String(nlData[i][2] || "").trim();
-            const position = String(nlData[i][5] || "").trim();
+            const company = getNewsletterCell(nlData[i], newsletterColumns, 'company');
+            const position = getNewsletterCell(nlData[i], newsletterColumns, 'position');
             if (!company || !position) continue;
 
-            const logoValue = nlData[i][logoColumn >= 0 ? logoColumn : 22];
-            vacancies.push({ date: nlData[i][1] || "", company, companyLogo: typeof logoValue === 'string' ? logoValue.trim() : "", position, state: nlData[i][6] || "OTHER STATES", location: nlData[i][7] || "Multiple Locations", modeOfWork: nlData[i][8] || "On-site", openings: nlData[i][9] || "01-02", qualification: nlData[i][10] || "Degree", description: nlData[i][11] || "", experience: nlData[i][12] || "Fresher", salary: nlData[i][13] || "Market Standard", interviewDate: nlData[i][15] || "Will inform once scheduled", lastDate: nlData[i][16] || "Open", course: nlData[i][4] || "All", newsletterId: nlData[i][19] || nlData[i][20] || `JOB-${1000 + i}` });
+            const logoValue = getNewsletterCell(nlData[i], newsletterColumns, 'companyLogo');
+            vacancies.push({
+                date: getNewsletterCell(nlData[i], newsletterColumns, 'date'), company,
+                companyLogo: logoValue, position,
+                state: getNewsletterCell(nlData[i], newsletterColumns, 'state', 'OTHER STATES') || 'OTHER STATES',
+                location: getNewsletterCell(nlData[i], newsletterColumns, 'location', 'Multiple Locations') || 'Multiple Locations',
+                modeOfWork: getNewsletterCell(nlData[i], newsletterColumns, 'modeOfWork', 'On-site') || 'On-site',
+                openings: getNewsletterCell(nlData[i], newsletterColumns, 'openings', '01-02') || '01-02',
+                qualification: getNewsletterCell(nlData[i], newsletterColumns, 'qualification', 'Degree') || 'Degree',
+                description: getNewsletterCell(nlData[i], newsletterColumns, 'description'),
+                experience: getNewsletterCell(nlData[i], newsletterColumns, 'experience', 'Fresher') || 'Fresher',
+                salary: getNewsletterCell(nlData[i], newsletterColumns, 'salary', 'Market Standard') || 'Market Standard',
+                interviewDate: getNewsletterCell(nlData[i], newsletterColumns, 'interviewDate', 'Will inform once scheduled') || 'Will inform once scheduled',
+                lastDate: getNewsletterCell(nlData[i], newsletterColumns, 'lastDate', 'Open') || 'Open',
+                course: getNewsletterCell(nlData[i], newsletterColumns, 'course', 'All') || 'All',
+                newsletterId: getNewsletterJobId(nlData[i], newsletterColumns, i),
+            });
         }
 
         // Process TPO Info
@@ -529,33 +585,34 @@ const applyForJob = async (req, res) => {
             }
         }
 
-        const nlData = await DatabaseService.getSheetData("NewsLetter!A:U");
+        const nlData = await DatabaseService.getSheetData("NewsLetter!A:X", undefined, 0);
+        const newsletterColumns = getNewsletterColumns(nlData[0] || []);
         let opening = null;
         for (let i = 1; i < nlData.length; i++) {
-            let currentId = getCol(nlData[i], 19, "") || getCol(nlData[i], 20, "") || `JOB-${1000 + i}`;
-            if (currentId.toString().trim() === jobId.toString().trim()) {
+            const currentId = getNewsletterJobId(nlData[i], newsletterColumns, i);
+            if (currentId === String(jobId).trim()) {
                 opening = nlData[i];
                 break;
             }
         }
         if (!opening) return res.status(404).json({ success: false, message: 'This job opening is no longer available.' });
-        if (requiresPriorExperience(getCol(opening, 12)) && /fresher|no experience|entry.level/i.test(student.fresherStatus)) {
+        if (requiresPriorExperience(getNewsletterCell(opening, newsletterColumns, 'experience')) && /fresher|no experience|entry.level/i.test(student.fresherStatus)) {
             return res.status(403).json({ success: false, message: 'This opening requires prior experience. Your profile is marked as a fresher, so applications are disabled.' });
         }
-        const openingStatus = normalize(opening[18] || 'yes');
+        const openingStatus = normalize(getNewsletterCell(opening, newsletterColumns, 'status', 'yes') || 'yes');
         if (openingStatus.includes('no') || openingStatus.includes('closed') || openingStatus === 'false') return res.status(400).json({ success: false, message: 'This job opening has closed.' });
-        const applyBy = parseDateKey(getCol(opening, 16));
+        const applyBy = parseDateKey(getNewsletterCell(opening, newsletterColumns, 'lastDate'));
         if (applyBy && applyBy < dateKeyInIndia(new Date())) return res.status(400).json({ success: false, message: 'This job opening has expired.' });
-        const openingCourse = normalize(getCol(opening, 4, 'All'));
+        const openingCourse = normalize(getNewsletterCell(opening, newsletterColumns, 'course', 'All'));
         if (openingCourse && !openingCourse.includes('all') && !openingCourse.split(/[,;|]/).map(normalize).some((course) => course === normalize(student.course))) {
             const courseMap = await buildCourseMap();
             const mainCourse = normalize(courseMap[normalize(student.course)] || student.course);
             const listedCourses = openingCourse.split(/[,;|]/).map(normalize);
             if (!listedCourses.includes(mainCourse)) return res.status(403).json({ success: false, message: 'This opening is not matched to your course.' });
         }
-        const position = getCol(opening, 5, 'N/A');
-        const companyName = getCol(opening, 2, 'Placement Partner');
-        const placementOfficer = getCol(opening, 17, 'TPO Auto-Assigned');
+        const position = getNewsletterCell(opening, newsletterColumns, 'position', 'N/A');
+        const companyName = getNewsletterCell(opening, newsletterColumns, 'company', 'Placement Partner');
+        const placementOfficer = getNewsletterCell(opening, newsletterColumns, 'placementOfficer', 'TPO Auto-Assigned');
         if (!student.resume || student.resume === 'N/A') return res.status(400).json({ success: false, message: 'Upload your resume before applying.' });
 
         await DatabaseService.appendRowRaw("Opening_Applied!A:N", [timestamp, student.name, student.phone, student.email, student.rollNo, student.course, student.branch, student.qualification || "N/A", student.resume, jobId, companyName, position, placementOfficer, "Applied"]);

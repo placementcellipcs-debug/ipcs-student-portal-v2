@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
@@ -20,7 +20,13 @@ const isEventExpired = (dateStr) => {
   return isEventPast(dateStr);
 };
 
-const formatDateOrText = (value) => formatPortalDate(value) || (value ? String(value) : '—');
+const formatDateOrText = (value) => {
+  const formattedDate = formatPortalDate(value);
+  if (formattedDate) return formattedDate;
+  const text = String(value || '').trim();
+  if (!text) return '—';
+  return /^\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/.test(text) ? 'Date unavailable' : text;
+};
 
 const displayOpeningId = (value) => {
   const openingId = String(value || '').trim();
@@ -42,9 +48,10 @@ export default function JobVacancies() {
   const [activeTab, setActiveTab] = useState('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [stateFilter, setStateFilter] = useState('all');
+  const applySubmissionRef = useRef(false);
 
   const fetchData = useCallback(async () => {
-    if (!user || !user.email) return;
+    if (!user || !user.email) return null;
     try {
       const res = await api.post('/api/dashboard/data', { 
         email: user.email, branch: user.branch, course: user.course, joiningDate: user.joiningDate 
@@ -52,9 +59,12 @@ export default function JobVacancies() {
       if (res.data.success) {
         setVacancies(res.data.vacancies || []);
         setAppliedJobs(res.data.appliedJobs || []);
+        return res.data;
       }
+      return null;
     } catch (err) {
       console.error('Failed to load vacancies:', err);
+      return null;
     }
   }, [user]);
 
@@ -91,7 +101,9 @@ export default function JobVacancies() {
   };
 
   const handleApply = async () => {
+    if (applySubmissionRef.current) return;
     if (!q1 || !q2) { setActionStatus({ type: 'error', message: 'You must check both consent boxes to apply.' }); return; }
+    applySubmissionRef.current = true;
     setActionStatus({ type: 'info', message: 'Submitting application...' });
     try {
       const res = await api.post('/api/dashboard/apply', { 
@@ -113,7 +125,26 @@ export default function JobVacancies() {
       }
     } catch(err) {
       console.error('Failed to submit job application:', err);
-      setActionStatus({ type: 'error', message: 'Server Error applying for job' }); 
+      const refreshed = await fetchData();
+      const jobId = String(jobModal.newsletterId || '').trim();
+      const applicationWasRecorded = (refreshed?.appliedJobs || []).some((job) => String(job.jobId || '').trim() === jobId);
+      if (applicationWasRecorded) {
+        setShowConfetti(true);
+        setTimeout(() => {
+          setJobModal(null); setActionStatus(null); setShowConsent(false); setQ1(false); setQ2(false); setShowConfetti(false);
+        }, 2500);
+      } else {
+        const serverMessage = err.response?.data?.message;
+        const statusCode = err.response?.status;
+        setActionStatus({
+          type: 'error',
+          message: serverMessage || (statusCode === 403
+            ? 'The server denied this application (HTTP 403). Refresh the opening and sign in again. If it continues, contact your Placement Officer.'
+            : 'We could not confirm whether your application was saved. Check Application Status before trying again.'),
+        });
+      }
+    } finally {
+      applySubmissionRef.current = false;
     }
   };
 

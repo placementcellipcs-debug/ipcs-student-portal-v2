@@ -23,7 +23,7 @@ const partsInIndia = (date) => {
 const getPortalDateParts = (value, { legacyUsTimestamp = false } = {}) => {
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return null;
-    return localDateParts(value.getFullYear(), value.getMonth() + 1, value.getDate());
+    return partsInIndia(value);
   }
 
   const text = String(value ?? '').trim();
@@ -34,6 +34,11 @@ const getPortalDateParts = (value, { legacyUsTimestamp = false } = {}) => {
     const [, yearText, monthText, dayText] = iso;
     const parts = localDateParts(Number(yearText), Number(monthText), Number(dayText));
     return validDateParts(parts.year, parts.month, parts.day) ? parts : null;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T/i.test(text)) {
+    const instant = new Date(text);
+    return Number.isNaN(instant.getTime()) ? null : partsInIndia(instant);
   }
 
   const numeric = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(.*)$/);
@@ -70,40 +75,94 @@ export const formatPortalDate = (value, { legacyUsTimestamp = false } = {}) => {
   return `${pad(parts.day)}/${pad(parts.month)}/${parts.year}`;
 };
 
+const getClockParts = (value) => {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: INDIA_TIME_ZONE, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(value);
+    const result = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return { hour: Number(result.hour), minute: Number(result.minute), second: Number(result.second) };
+  }
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+
+  const clock = text.match(/(?:^|[,\sT])(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?(?:\s*(?:Z|[+-]\d{2}:?\d{2}))?$/i);
+  if (clock) {
+    let hour = Number(clock[1]);
+    const minute = Number(clock[2]);
+    const second = Number(clock[3] || 0);
+    const meridiem = String(clock[4] || '').toLowerCase();
+    if (minute > 59 || second > 59 || hour > (meridiem ? 12 : 23) || (meridiem && hour === 0)) return null;
+    if (meridiem === 'pm' && hour < 12) hour += 12;
+    if (meridiem === 'am' && hour === 12) hour = 0;
+    return { hour, minute, second };
+  }
+  return null;
+};
+
+const formatClockParts = (parts) => parts
+  ? `${pad(parts.hour)}:${pad(parts.minute)}:${pad(parts.second)}`
+  : '';
+
+export const formatPortalTime = (value) => {
+  if (value instanceof Date) return formatClockParts(getClockParts(value));
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  if (/^\d{4}-\d{2}-\d{2}T/i.test(text)) {
+    const instant = new Date(text);
+    return Number.isNaN(instant.getTime()) ? '' : formatClockParts(getClockParts(instant));
+  }
+  const direct = getClockParts(text);
+  if (direct) return formatClockParts(direct);
+
+  const legacyMedium = text.match(/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4},?\s+(.+)$/);
+  if (legacyMedium) return formatClockParts(getClockParts(legacyMedium[1]));
+  return '';
+};
+
+export const parsePortalDateTime = (value) => {
+  if (!value) return '';
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}T/i.test(text)) {
+    const instant = new Date(text);
+    return Number.isNaN(instant.getTime()) ? null : instant;
+  }
+
+  const legacyMedium = text.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4}),?\s+(\d{1,2}:\d{2}:\d{2})$/);
+  if (legacyMedium) {
+    const monthNumber = new Date(`${legacyMedium[2]} 1, 2000`).getMonth() + 1;
+    const dateText = `${legacyMedium[1]}/${monthNumber}/${legacyMedium[3]}`;
+    return parsePortalDateTime(`${dateText} ${legacyMedium[4]}`);
+  }
+
+  const timestamp = text.match(/^(\d{1,2}[-/]\d{1,2}[-/]\d{4})(,?\s+)(.+)$/);
+  if (timestamp) {
+    const legacyUsTimestamp = timestamp[2].startsWith(',') && Number(timestamp[1]) <= 12;
+    const dateParts = getPortalDateParts(`${timestamp[1]}${timestamp[2]}`, { legacyUsTimestamp });
+    const timeParts = getClockParts(timestamp[3]);
+    if (!dateParts || !timeParts) return null;
+    const instant = new Date(Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, timeParts.hour, timeParts.minute, timeParts.second)
+      - INDIA_OFFSET_MINUTES * 60 * 1000);
+    return Number.isNaN(instant.getTime()) ? null : instant;
+  }
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 export const formatPortalDateTime = (value) => {
   if (!value) return '';
   const text = String(value).trim();
-  const parts = getPortalDateParts(text, { legacyUsTimestamp: true });
-  if (!parts) return text;
-
-  const legacyTimestamp = text.match(/^\d{1,2}[-/]\d{1,2}[-/]\d{4},\s*(.+)$/);
-  if (legacyTimestamp) return `${formatPortalDate(text, { legacyUsTimestamp: true })} · ${legacyTimestamp[1]}`;
-
-  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}T/i.test(text)) {
-    const instant = new Date(text);
-    if (!Number.isNaN(instant.getTime())) {
-      const time = new Intl.DateTimeFormat('en-GB', {
-        timeZone: INDIA_TIME_ZONE,
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(instant);
-      return `${formatPortalDate(text)} · ${time}`;
-    }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return formatPortalDate(text);
+  const instant = parsePortalDateTime(value);
+  if (instant instanceof Date) {
+    return `${formatPortalDate(instant)} ${formatPortalTime(instant)}`;
   }
-
-  if (/\b\d{1,2}:\d{2}\b/.test(text)) {
-    const instant = new Date(text);
-    if (!Number.isNaN(instant.getTime())) {
-      const time = new Intl.DateTimeFormat('en-GB', {
-        timeZone: INDIA_TIME_ZONE,
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(instant);
-      return `${formatPortalDate(text)} · ${time}`;
-    }
-  }
-
-  return formatPortalDate(text);
+  const dateOnly = formatPortalDate(text);
+  if (dateOnly && !getClockParts(text)) return dateOnly;
+  return '';
 };
 
 const parseEventTime = (value) => {

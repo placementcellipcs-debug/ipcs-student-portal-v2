@@ -10,7 +10,7 @@ const authenticateToken = (req, res, next) => {
     }
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, user) => {
-        if (err) return res.status(403).json({ success: false, message: "Invalid or expired token. Please log in again." });
+        if (err) return res.status(403).json({ success: false, code: 'INVALID_OR_EXPIRED_TOKEN', message: "Invalid or expired token. Please log in again." });
 
         try {
             const email = String(user?.email || '').trim().toLowerCase();

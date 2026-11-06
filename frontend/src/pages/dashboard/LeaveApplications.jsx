@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../config/axios';
-import { formatPortalDate, formatPortalDateTime } from '../../utils/portalDate';
+import { formatPortalDate, formatPortalDateTime, portalDateInputValue } from '../../utils/portalDate';
 
 const localToday = () => {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return portalDateInputValue(new Date());
 };
 
 const formatDate = (value) => {
   if (!value) return 'Date not available';
-  return formatPortalDate(value) || String(value);
+  return formatPortalDate(value) || 'Date unavailable';
 };
 
 export default function LeaveApplications() {
@@ -81,7 +80,7 @@ export default function LeaveApplications() {
             <div className="leave-record-list">{records.map((record, index) => (
             <article className="leave-record-card" key={`${record.timestamp}-${record.startDate}-${index}`}>
                 <div className="leave-record-icon"><i className={`ph ${record.type === 'Absence Notice' ? 'ph-info' : 'ph-calendar-x'}`} aria-hidden="true"></i></div>
-                <div className="leave-record-copy"><div><strong>{record.type}</strong><span className={`leave-status ${String(record.status).toLowerCase().replace(/\s+/g, '-')}`}>{record.status}</span></div><p>{formatDate(record.startDate)}{record.endDate && record.endDate !== record.startDate ? ` – ${formatDate(record.endDate)}` : ''}</p><small>{record.reason}</small><time>{formatPortalDateTime(record.timestamp) || record.timestamp}</time></div>
+                <div className="leave-record-copy"><div><strong>{record.type}</strong><span className={`leave-status ${String(record.status).toLowerCase().replace(/\s+/g, '-')}`}>{record.status}</span></div><p>{formatDate(record.startDate)}{record.endDate && record.endDate !== record.startDate ? ` – ${formatDate(record.endDate)}` : ''}</p><small>{record.reason}</small><time>{formatPortalDateTime(record.timestamp) || 'Date unavailable'}</time></div>
               </article>
             ))}</div>
           ) : <div className="empty-panel-message"><i className="ph ph-calendar-blank" aria-hidden="true"></i><strong>No leave history</strong><span>Your requests and absence notices will appear here.</span></div>}

@@ -5,7 +5,7 @@ import { formatPortalDate, formatPortalDateTime } from '../../utils/portalDate';
 
 const formatDate = (value) => {
   if (!value) return 'Date not available';
-  return formatPortalDate(value) || String(value).trim();
+  return formatPortalDate(value) || 'Date unavailable';
 };
 
 export default function StudentDiary() {

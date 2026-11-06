@@ -1,5 +1,18 @@
-const CACHE_NAME = 'talenzo-v2';
+const CACHE_NAME = 'talenzo-v3';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/talenzo-brand-mark.png', '/icons/app-icon-192.png', '/icons/app-icon-512.png'];
+
+const cacheResponse = (event, request, response) => {
+  if (!response.ok || response.type !== 'basic') return;
+
+  // Clone before starting async cache work. The page may consume the original
+  // response while caches.open() is pending.
+  const cachedResponse = response.clone();
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.put(request, cachedResponse))
+      .catch(() => {})
+  );
+};
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -26,7 +39,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put('/', response.clone()));
+          cacheResponse(event, '/', response);
           return response;
         })
         .catch(async () => (await caches.match('/')) || Response.error())
@@ -38,7 +51,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response.ok && response.type === 'basic') caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+          cacheResponse(event, request, response);
           return response;
         })
         .catch(async () => (await caches.match(request)) || Response.error())

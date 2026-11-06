@@ -135,9 +135,12 @@ export default function JobVacancies() {
         }, 2500);
       } else {
         const serverMessage = err.response?.data?.message;
+        const statusCode = err.response?.status;
         setActionStatus({
           type: 'error',
-          message: serverMessage || 'We could not confirm whether your application was saved. Check Application Status before trying again.',
+          message: serverMessage || (statusCode === 403
+            ? 'The server denied this application (HTTP 403). Refresh the opening and sign in again. If it continues, contact your Placement Officer.'
+            : 'We could not confirm whether your application was saved. Check Application Status before trying again.'),
         });
       }
     } finally {

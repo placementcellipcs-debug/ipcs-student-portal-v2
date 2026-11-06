@@ -10,20 +10,6 @@ const { getCourseAccess, courseMatchesAccess } = require('../services/courseServ
 const { formatDateIndia, formatTimeIndia, formatDateTimeIndia, formatDateInputIndia } = require('../utils/portalDateTime');
 
 // Helpers
-const buildCourseMap = async () => {
-    try {
-        const rows = await DatabaseService.getSheetData("Courses!A:B");
-        let courseMap = {}; let currentMainCourse = "";
-        for (let i = 0; i < rows.length; i++) {
-            const colA = rows[i][0] ? rows[i][0].toString().trim() : "";
-            const colB = rows[i][1] ? rows[i][1].toString().trim() : "";
-            if (colA !== "") currentMainCourse = colA.replace(/^\d+\.\s*/, '').trim().toLowerCase();
-            if (colB !== "" && currentMainCourse !== "") courseMap[colB.toLowerCase()] = currentMainCourse;
-        }
-        return courseMap;
-    } catch (e) { return {}; }
-};
-
 function isSameDay(dateStr, now) {
     const scheduledDate = parseDateKey(dateStr);
     return Boolean(scheduledDate && scheduledDate === dateKeyInIndia(now));
@@ -191,8 +177,7 @@ const getDashboardData = async (req, res) => {
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
 
         // Fetch all sheets in parallel via our Database Service
-        const [courseMap, userDataRows, appData, evData, driveData, schedData, attData, nlData, contactData] = await Promise.all([
-            buildCourseMap(),
+        const [userDataRows, appData, evData, driveData, schedData, attData, nlData, contactData] = await Promise.all([
             DatabaseService.getSheetData("Data!A:AG"),
             DatabaseService.getSheetData("Opening_Applied!A:O"),
             DatabaseService.getSheetData("Event!A:U"),
@@ -290,21 +275,13 @@ const getDashboardData = async (req, res) => {
 
         // Process Job Vacancies
         let vacancies = [];
-        const cleanStudentSubcourse = (userInfo.course || "").trim().toLowerCase();
-        const studentMainCourse = courseMap[cleanStudentSubcourse] || cleanStudentSubcourse;
         const newsletterColumns = getNewsletterColumns(nlData[0] || []);
 
         for (let i = 1; vacancyAccess && i < nlData.length; i++) {
             const status = normalize(getNewsletterCell(nlData[i], newsletterColumns, 'status', 'yes') || 'yes');
             if (status.includes("no") || status.includes("closed") || status === "false") continue;
-            const rowCourse = normalize(getNewsletterCell(nlData[i], newsletterColumns, 'course', 'all') || 'all');
-            let isCourseMatch = false;
-
-            if (rowCourse.includes("all") || rowCourse === "") isCourseMatch = true;
-            else if (rowCourse.includes(studentMainCourse) || studentMainCourse.includes(rowCourse)) isCourseMatch = true;
-            else if (rowCourse.includes(cleanStudentSubcourse) || cleanStudentSubcourse.includes(rowCourse)) isCourseMatch = true;
-
-            if (!isCourseMatch) continue;
+            const rowCourse = getNewsletterCell(nlData[i], newsletterColumns, 'course', 'All') || 'All';
+            if (!courseMatchesAccess(rowCourse, studentCourseAccess, { allowAll: true })) continue;
             
             // Do not turn blank / partially filled NewsLetter rows into fake
             // openings by filling both fields with display defaults below.
@@ -573,7 +550,7 @@ const applyForJob = async (req, res) => {
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
         const student = await findStudent(email);
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
-        if (!/^(yes|true|1)$/i.test(student.vacancyOpen)) return res.status(403).json({ success: false, message: 'Your access to job openings is currently restricted.' });
+        if (!/^(yes|true|1)$/i.test(student.vacancyOpen)) return res.status(403).json({ success: false, code: 'VACANCY_ACCESS_RESTRICTED', message: 'Your access to job openings is currently restricted.' });
         const { jobId } = req.body;
         if (!jobId) return res.status(400).json({ success: false, message: 'Select a valid job opening.' });
         const timestamp = formatDateTimeIndia();
@@ -597,18 +574,16 @@ const applyForJob = async (req, res) => {
         }
         if (!opening) return res.status(404).json({ success: false, message: 'This job opening is no longer available.' });
         if (requiresPriorExperience(getNewsletterCell(opening, newsletterColumns, 'experience')) && /fresher|no experience|entry.level/i.test(student.fresherStatus)) {
-            return res.status(403).json({ success: false, message: 'This opening requires prior experience. Your profile is marked as a fresher, so applications are disabled.' });
+            return res.status(403).json({ success: false, code: 'EXPERIENCE_REQUIRED', message: 'This opening requires prior experience. Your profile is marked as a fresher, so applications are disabled.' });
         }
         const openingStatus = normalize(getNewsletterCell(opening, newsletterColumns, 'status', 'yes') || 'yes');
         if (openingStatus.includes('no') || openingStatus.includes('closed') || openingStatus === 'false') return res.status(400).json({ success: false, message: 'This job opening has closed.' });
         const applyBy = parseDateKey(getNewsletterCell(opening, newsletterColumns, 'lastDate'));
         if (applyBy && applyBy < dateKeyInIndia(new Date())) return res.status(400).json({ success: false, message: 'This job opening has expired.' });
-        const openingCourse = normalize(getNewsletterCell(opening, newsletterColumns, 'course', 'All'));
-        if (openingCourse && !openingCourse.includes('all') && !openingCourse.split(/[,;|]/).map(normalize).some((course) => course === normalize(student.course))) {
-            const courseMap = await buildCourseMap();
-            const mainCourse = normalize(courseMap[normalize(student.course)] || student.course);
-            const listedCourses = openingCourse.split(/[,;|]/).map(normalize);
-            if (!listedCourses.includes(mainCourse)) return res.status(403).json({ success: false, message: 'This opening is not matched to your course.' });
+        const openingCourse = getNewsletterCell(opening, newsletterColumns, 'course', 'All') || 'All';
+        const studentCourseAccess = await getStudentCourseAccess(student.course);
+        if (!courseMatchesAccess(openingCourse, studentCourseAccess, { allowAll: true })) {
+            return res.status(403).json({ success: false, code: 'COURSE_MISMATCH', message: 'This opening is not matched to your course.' });
         }
         const position = getNewsletterCell(opening, newsletterColumns, 'position', 'N/A');
         const companyName = getNewsletterCell(opening, newsletterColumns, 'company', 'Placement Partner');

@@ -265,9 +265,11 @@ const getDashboardData = async (req, res) => {
 
             if (!isCourseMatch) continue;
             
-            let company = nlData[i][2] || "Placement Partner";
-            let position = nlData[i][5] || "Technical Role";
-            if (!company && !position) continue;
+            // Do not turn blank / partially filled NewsLetter rows into fake
+            // openings by filling both fields with display defaults below.
+            const company = String(nlData[i][2] || "").trim();
+            const position = String(nlData[i][5] || "").trim();
+            if (!company || !position) continue;
 
             const logoValue = nlData[i][logoColumn >= 0 ? logoColumn : 22];
             vacancies.push({ date: nlData[i][1] || "", company, companyLogo: typeof logoValue === 'string' ? logoValue.trim() : "", position, state: nlData[i][6] || "OTHER STATES", location: nlData[i][7] || "Multiple Locations", modeOfWork: nlData[i][8] || "On-site", openings: nlData[i][9] || "01-02", qualification: nlData[i][10] || "Degree", description: nlData[i][11] || "", experience: nlData[i][12] || "Fresher", salary: nlData[i][13] || "Market Standard", interviewDate: nlData[i][15] || "Will inform once scheduled", lastDate: nlData[i][16] || "Open", course: nlData[i][4] || "All", newsletterId: nlData[i][19] || nlData[i][20] || `JOB-${1000 + i}` });
@@ -522,7 +524,7 @@ const applyForJob = async (req, res) => {
 
         const checkData = await DatabaseService.getSheetData("Opening_Applied!A:J");
         for (let i = 1; i < checkData.length; i++) {
-            if (normalize(getCol(checkData[i], 3)) === email && getCol(checkData[i], 9, "") === String(jobId)) {
+            if (normalize(getCol(checkData[i], 3)) === email && getCol(checkData[i], 9, "").trim() === String(jobId).trim()) {
                 return res.status(400).json({ success: false, message: "You have already applied for this job opening." });
             }
         }
@@ -557,11 +559,26 @@ const applyForJob = async (req, res) => {
         if (!student.resume || student.resume === 'N/A') return res.status(400).json({ success: false, message: 'Upload your resume before applying.' });
 
         await DatabaseService.appendRowRaw("Opening_Applied!A:N", [timestamp, student.name, student.phone, student.email, student.rollNo, student.course, student.branch, student.qualification || "N/A", student.resume, jobId, companyName, position, placementOfficer, "Applied"]);
-        await DatabaseService.appendRowRaw("TPO_Log!A:V", [ timestamp, student.name, student.phone, student.email, student.rollNo, student.course, student.branch, student.qualification || "N/A", student.resume, jobId, companyName, position, placementOfficer, "Applied", "", "", "", "", "", "", "", "" ]);
+        let placementLogSaved = true;
+        try {
+            await DatabaseService.appendRowRaw("TPO_Log!A:V", [ timestamp, student.name, student.phone, student.email, student.rollNo, student.course, student.branch, student.qualification || "N/A", student.resume, jobId, companyName, position, placementOfficer, "Applied", "", "", "", "", "", "", "", "" ]);
+        } catch (logError) {
+            // Opening_Applied is the record that confirms the student's
+            // application. A failure to mirror it to the placement timeline
+            // must not make the student believe the application was rejected
+            // and submit it again.
+            placementLogSaved = false;
+            console.error("Application saved but TPO log append failed:", logError.message);
+        }
 
-        return res.status(200).json({ success: true, message: "Applied successfully!" });
+        return res.status(200).json({
+            success: true,
+            message: placementLogSaved ? "Applied successfully!" : "Application received. Placement tracking will update shortly.",
+            trackingPending: !placementLogSaved,
+        });
     } catch (error) { 
-        return res.status(500).json({ success: false, message: "Failed to apply for job." }); 
+        console.error("Job application save failed:", error.message);
+        return res.status(500).json({ success: false, message: "Your application could not be saved. Please try again, or contact your Placement Officer if the problem continues." }); 
     }
 };
 

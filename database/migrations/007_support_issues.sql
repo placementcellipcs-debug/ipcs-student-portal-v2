@@ -1,0 +1,36 @@
+-- Student-submitted support issues reviewed by the TPO portal.
+CREATE TABLE IF NOT EXISTS support_issues (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  student_id CHAR(36) NULL,
+  student_email VARCHAR(254) NULL,
+  student_name VARCHAR(200) NOT NULL DEFAULT 'Student',
+  phone VARCHAR(40) NULL,
+  roll_number VARCHAR(100) NULL,
+  branch_id CHAR(36) NULL,
+  course_id CHAR(36) NULL,
+  branch_name VARCHAR(160) NULL,
+  course_name VARCHAR(200) NULL,
+  location VARCHAR(120) NULL,
+  details TEXT NOT NULL,
+  status VARCHAR(40) NOT NULL DEFAULT 'Pending',
+  remarks TEXT NULL,
+  reported_at DATETIME NULL,
+  reported_at_raw VARCHAR(120) NOT NULL DEFAULT '',
+  updated_by_user_id CHAR(36) NULL,
+  source VARCHAR(80) NOT NULL,
+  source_record_key VARCHAR(200) NOT NULL,
+  source_row_number INT UNSIGNED NULL,
+  metadata JSON NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_support_issue_source (source, source_record_key),
+  KEY ix_support_issue_student_time (student_id, created_at),
+  KEY ix_support_issue_branch_course (branch_id, course_id, status),
+  KEY ix_support_issue_status_time (status, created_at),
+  CONSTRAINT fk_support_issue_student FOREIGN KEY (student_id) REFERENCES student_profiles(id) ON DELETE SET NULL,
+  CONSTRAINT fk_support_issue_branch FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL,
+  CONSTRAINT fk_support_issue_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL,
+  CONSTRAINT fk_support_issue_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO schema_migrations (version) VALUES ('007_support_issues');

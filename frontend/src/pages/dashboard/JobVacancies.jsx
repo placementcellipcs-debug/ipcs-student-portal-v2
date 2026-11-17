@@ -53,9 +53,7 @@ export default function JobVacancies() {
   const fetchData = useCallback(async () => {
     if (!user || !user.email) return null;
     try {
-      const res = await api.post('/api/dashboard/data', { 
-        email: user.email, branch: user.branch, course: user.course, joiningDate: user.joiningDate 
-      });
+      const res = await api.get('/api/dashboard/vacancies');
       if (res.data.success) {
         setVacancies(res.data.vacancies || []);
         setAppliedJobs(res.data.appliedJobs || []);
@@ -72,9 +70,7 @@ export default function JobVacancies() {
     if (!user?.email) return undefined;
 
     let cancelled = false;
-    api.post('/api/dashboard/data', {
-      email: user.email, branch: user.branch, course: user.course, joiningDate: user.joiningDate
-    })
+    api.get('/api/dashboard/vacancies')
       .then((res) => {
         if (!cancelled && res.data.success) {
           setVacancies(res.data.vacancies || []);

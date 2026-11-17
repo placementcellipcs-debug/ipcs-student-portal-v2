@@ -1,5 +1,8 @@
 const DatabaseService = require('../services/dbService');
 const { formatDateTimeIndia } = require('../utils/portalDateTime');
+const mysqlStudentLeave = require('../services/mysqlStudentLeaveService');
+
+const usesMysqlStudentLeave = () => String(process.env.MYSQL_STUDENT_LEAVE_ENABLED || '').trim().toLowerCase() === 'true';
 
 const SHEET_NAME = 'Leave_Applications';
 const SHEET_RANGE = `${SHEET_NAME}!A:K`;
@@ -44,6 +47,18 @@ const serializeRecord = (row) => ({
 });
 
 const getLeaveRecords = async (req, res) => {
+    if (usesMysqlStudentLeave()) {
+        try {
+            const email = normalizeEmail(req.user?.email);
+            if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
+            const records = await mysqlStudentLeave.listStudentLeaveRequests(email);
+            if (!records) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
+            return res.json({ success: true, records });
+        } catch (error) {
+            console.error('MySQL leave records read error:', error.message);
+            return res.status(error.status || 503).json({ success: false, code: error.code || 'LEAVE_UNAVAILABLE', message: error.status ? error.message : 'Leave requests are unavailable right now.' });
+        }
+    }
     try {
         const email = normalizeEmail(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
@@ -61,6 +76,17 @@ const getLeaveRecords = async (req, res) => {
 };
 
 const submitLeaveRequest = async (req, res) => {
+    if (usesMysqlStudentLeave()) {
+        try {
+            const email = normalizeEmail(req.user?.email);
+            if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
+            const result = await mysqlStudentLeave.submitStudentLeaveRequest(email, req.body || {});
+            return res.status(201).json({ success: true, ...result });
+        } catch (error) {
+            console.error('MySQL leave request submission error:', error.message);
+            return res.status(error.status || 503).json({ success: false, code: error.code || 'LEAVE_SAVE_FAILED', message: error.status ? error.message : 'Could not save your leave request. Please try again.' });
+        }
+    }
     try {
         const email = normalizeEmail(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });

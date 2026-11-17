@@ -3,6 +3,18 @@
 **Prepared:** 30 September 2026  
 **Goal:** Keep the existing student features and data while moving storage to Hostinger MySQL, with the placement API and Talenzo API remaining separate web services.
 
+## Current migration status — 18 November 2026
+
+Both backend projects connected over TLS to the confirmed Hostinger MariaDB 11.8 database. The shared schema migrations 001–009 have been applied. A read-only source capture archived 8 workbooks, 103 tabs, and 352,927 non-header rows; verification found no tab-count mismatches. The import did not edit any source workbook. The local `ipcs_portal_dev` schema was removed at the user's request.
+
+Initial normalized imports populated 34 branches, 123 courses, 75 staff accounts, 2,683 unique student profiles (2,679 linked student accounts), 553 vacancies, 13 monthly targets, 90 events, 362 current drive responses, 8,403 tracker rows, 2,349 placement outcomes, 2,155 companies, 20 deletion requests, asset taxonomy/register/history/activity/QR records, one leave request, and eight support issues. All captured source records remain available in the archive. Ambiguous identities and incomplete rows were not guessed: 116 student rows lacked a unique roll number; 1,357 tracker owners need review; 3,079 tracker entries lack a student or opening link; 629 placement outcome owners need review; eight placement dates were not recognized; and 550 package values were not parsed. Asset taxonomy codes also contain duplicates; asset records were preserved and duplicate source codes are surfaced by the import preview.
+
+This is not a full portal cutover. Many dashboards, training/attendance, diary, content, applications, messages, mail reports, and scheduled jobs still read or write Google Sheets. Runtime feature flags and Render deployments have not been switched. Keep Sheets available until the remaining modules are migrated and reconciled.
+
+Security note: a diagnostic accidentally printed the Student backend database password. The old value was cleared from both local `.env` files. Rotate the database user's password in Hostinger and enter the replacement in both files before performing more remote SQL work. Never put a database password in chat, source code, frontend variables, Git, or screenshots.
+
+Do not enable a production MySQL flag until all modules and scheduled work that read or write Sheets have migrated, the data has been reconciled, and both local portals have passed end-to-end checks. The intended final state is MySQL as the only live backend with no Google Sheets runtime or fallback.
+
 ## First: the screenshot and the database password
 
 The screenshot is context showing Hostinger's create-database form; it is not an instruction to reuse the text shown in the form. It also exposes a password. Treat that value as compromised. If it was saved or submitted, change/reset the database user's password in hPanel now. If it was not submitted, do not use that value; generate a different strong password. Do not put any database password in React/Vite variables, source code, Git, chat, or screenshots.
@@ -25,7 +37,7 @@ There is a second design option: make one API the owner of shared student data, 
 
 ## What I found in this workspace
 
-This workspace contains the Talenzo React frontend and its Node/Express API. It does **not** contain the separate placement API's repository or schema, so its existing tables and write behavior must be inventoried before making the shared schema. The Talenzo backend currently uses `googleapis` and has no MySQL driver. Its controllers call a `DatabaseService` that accepts Google Sheets A1 ranges; a few profile/password/document paths also call the Google Sheets SDK directly. Consequently, changing only the database credentials in Hostinger will not migrate the portal—the backend code must be changed too.
+The two application repositories are available locally: the Student Portal contains the student-facing React/Vite app and Express API, and the TPO Portal contains the staff-facing app and Express API. Both now have MySQL support for selected workflows and use the shared schema in the Student Portal `database` directory. Both still contain Google Sheets integrations for modules that have not yet been ported. Changing only database credentials will not migrate those modules; every read, write, scheduled job, mail queue, and profile path must move to MySQL before the final Sheets-free cutover.
 
 Relevant files:
 
@@ -81,7 +93,7 @@ Build one canonical relational schema, not one unstructured text blob. Avoid cre
 | `Event`, `Drive_Registration` | `events`, `drive_responses` | Keep event IDs stable and responses tied to a student and event. |
 | `Talentino_Schedule`, `Talentino_Attendance` | `class_sessions`, `talentino_attendance` | Preserve existing date and session eligibility behavior, ratings, feedback and recorded coordinates. |
 | `Student_Diary` | `student_diary_entries` | Preserve `ATTENDANCE` and `SYLLABUS` record types, remarks, progress and GPS fields. |
-| `Leave_Applications` | `leave_applications` | Preserve `Pending` and `Notified` statuses; the student sees only their own rows. |
+| `Leave_Applications` | `student_leave_requests` | Preserve `Pending` and `Notified` statuses, raw date values, source row identity, and student-only access. |
 | `NewsLetter`, `Opening_Applied`, `TPO_Log` | `job_openings`, `job_applications`, `placement_audit_log` | Preserve opening IDs, status, officer assignment, remarks, and application history. |
 | `Study_Materials` | `study_materials` | Preserve active flag, target course, topic, link, and the student's material-access flag. |
 | Aptitude/Talentino/Tech question and result tabs | `assessment_questions`, `assessment_results` | Preserve assessment type, test/course key, question order/content, active state, answer/explanation, score and timing. Do not expose correct answers before review. |

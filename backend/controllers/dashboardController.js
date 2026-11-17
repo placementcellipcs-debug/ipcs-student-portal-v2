@@ -7,6 +7,10 @@ const { pipeline } = require('node:stream/promises');
 const { createEmailTransport, getEmailFrom } = require('../services/emailTransport');
 const { requiresPriorExperience } = require('../utils/jobEligibility');
 const { getCourseAccess, courseMatchesAccess } = require('../services/courseService');
+const MySqlApplicationService = require('../services/mysqlApplicationService');
+const mysqlSupportIssueService = require('../services/mysqlSupportIssueService');
+const mysqlStudentProfileService = require('../services/mysqlStudentProfileService');
+const mysqlStudentDriveService = require('../services/mysqlStudentDriveService');
 const { formatDateIndia, formatTimeIndia, formatDateTimeIndia, formatDateInputIndia } = require('../utils/portalDateTime');
 
 // Helpers
@@ -89,6 +93,9 @@ const isEventPast = (dateValue, timeValue, now = new Date()) => {
 
 const getCol = (row, idx, fallback = "") => (row && row[idx] !== undefined && row[idx] !== null) ? row[idx].toString().trim() : fallback;
 const normalize = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const usesMysqlSupportIssues = () => String(process.env.MYSQL_SUPPORT_ISSUES_ENABLED || '').trim().toLowerCase() === 'true';
+const usesMysqlStudentProfile = () => String(process.env.MYSQL_STUDENT_PROFILE_ENABLED || '').trim().toLowerCase() === 'true';
+const usesMysqlStudentDrives = () => String(process.env.MYSQL_STUDENT_DRIVES_ENABLED || '').trim().toLowerCase() === 'true';
 const normalizeSheetHeader = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 const getNewsletterColumns = (headerRow = []) => {
     const findColumn = (aliases, fallback) => {
@@ -178,20 +185,23 @@ const getDashboardData = async (req, res) => {
 
         // Fetch all sheets in parallel via our Database Service
         const [userDataRows, appData, evData, driveData, schedData, attData, nlData, contactData] = await Promise.all([
-            DatabaseService.getSheetData("Data!A:AG"),
+            usesMysqlStudentProfile() ? Promise.resolve([]) : DatabaseService.getSheetData("Data!A:AG"),
             DatabaseService.getSheetData("Opening_Applied!A:O"),
-            DatabaseService.getSheetData("Event!A:U"),
-            DatabaseService.getSheetData("Drive_Registration!A:J"),
+            usesMysqlStudentDrives() ? Promise.resolve([]) : DatabaseService.getSheetData("Event!A:U"),
+            usesMysqlStudentDrives() ? Promise.resolve([]) : DatabaseService.getSheetData("Drive_Registration!A:J"),
             DatabaseService.getSheetData("Talentino_Schedule!A:D"),
             DatabaseService.getSheetData("Talentino_Attendance!A:J"),
             DatabaseService.getSheetData("NewsLetter!A:X", undefined, 60),
             DatabaseService.getSheetData("Contact!A:H")
         ]);
 
-        let userInfo = {};
-        for (let i = userDataRows.length - 1; i >= 1; i--) {
-            if (normalize(userDataRows[i][3]) === email) {
-                userInfo = {
+        let userInfo = usesMysqlStudentProfile()
+            ? await mysqlStudentProfileService.getStudentByEmail(email) || {}
+            : {};
+        if (!usesMysqlStudentProfile()) {
+            for (let i = userDataRows.length - 1; i >= 1; i--) {
+                if (normalize(userDataRows[i][3]) === email) {
+                    userInfo = {
                     name: userDataRows[i][1] || "Student", phone: userDataRows[i][2] || "N/A", email: userDataRows[i][3], rollNo: userDataRows[i][5] || "N/A", 
                     joiningDate: userDataRows[i][6] || "N/A", course: userDataRows[i][7] || "N/A", branch: userDataRows[i][8] || "Bangalore", photo: userDataRows[i][9] || "", 
                     homeTown: userDataRows[i][10] || "N/A", qualification: userDataRows[i][11] || "N/A", stream: userDataRows[i][12] || "N/A", fresherStatus: userDataRows[i][13] || "N/A",
@@ -200,8 +210,9 @@ const getDashboardData = async (req, res) => {
                     parentName: userDataRows[i][22] || "N/A", parentContact: userDataRows[i][23] || "N/A", studyStatus: userDataRows[i][24] || "Currently Studying",
                     completedDate: userDataRows[i][25] || "N/A", age: userDataRows[i][26] || "N/A", gender: userDataRows[i][27] || "N/A", certificate: userDataRows[i][28] || "N/A",
                     vacancyOpen: userDataRows[i][29] || "No", techExamAccess: userDataRows[i][32] || "No"
-                }; 
-                break;
+                    };
+                    break;
+                }
             }
         }
 
@@ -209,6 +220,9 @@ const getDashboardData = async (req, res) => {
         const actualBranch = normalize(userInfo.branch);
         const studentCourseAccess = await getStudentCourseAccess(userInfo.course);
         const vacancyAccess = /^(yes|true|1)$/i.test(String(userInfo.vacancyOpen || 'No').trim());
+        const mysqlDriveData = usesMysqlStudentDrives()
+            ? await mysqlStudentDriveService.getStudentDriveData({ email })
+            : null;
 
         // Process Applied Jobs
         let appliedJobs = [];
@@ -228,8 +242,8 @@ const getDashboardData = async (req, res) => {
         }
 
         // Process Events
-        let events = [];
-        for (let i = 1; i < evData.length; i++) {
+        let events = mysqlDriveData?.events || [];
+        for (let i = 1; !usesMysqlStudentDrives() && i < evData.length; i++) {
             const isPlacementDrive = /placement drive/i.test(getCol(evData[i], 3));
             if (isPlacementDrive) {
                 if (!driveMatchesCourse(evData, evData[i], studentCourseAccess)) continue;
@@ -240,8 +254,8 @@ const getDashboardData = async (req, res) => {
         }
 
         // Process Drive RSVPs
-        let driveRSVPs = [];
-        for (let i = 1; i < driveData.length; i++) {
+        let driveRSVPs = mysqlDriveData?.driveRSVPs || [];
+        for (let i = 1; !usesMysqlStudentDrives() && i < driveData.length; i++) {
             if (normalize(driveData[i][3]) === email) {
                 driveRSVPs.push({ driveId: driveData[i][0] || "", status: driveData[i][8] || "" });
             }
@@ -326,6 +340,20 @@ const getDashboardData = async (req, res) => {
 
 // Targeted short-poll endpoint for new placement-drive reminders.
 const getDriveAlerts = async (req, res) => {
+    if (usesMysqlStudentDrives()) {
+        try {
+            const email = normalize(req.user?.email);
+            if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
+            const result = await mysqlStudentDriveService.getDriveAlerts({ email });
+            return res.status(200).json({ success: true, ...result, source: 'mysql' });
+        } catch (error) {
+            if (error instanceof mysqlStudentDriveService.StudentDriveError) {
+                return res.status(error.status).json({ success: false, code: error.code, message: error.message });
+            }
+            console.error('MySQL drive reminder poll failed:', error.message);
+            return res.status(503).json({ success: false, message: 'Drive reminders are temporarily unavailable.' });
+        }
+    }
     try {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
@@ -356,6 +384,22 @@ const getDriveAlerts = async (req, res) => {
         console.error('Drive reminder poll failed:', error.message);
         return res.status(503).json({ success: false, message: 'Drive reminders are temporarily unavailable.' });
     }
+};
+
+const getVacancyData = async (req, res) => {
+    if (String(process.env.MYSQL_JOB_APPLICATIONS_ENABLED || '').trim().toLowerCase() === 'true') {
+        try {
+            const data = await MySqlApplicationService.getVacancyData({ email: req.user?.email });
+            return res.status(200).json({ success: true, ...data, source: 'mysql' });
+        } catch (error) {
+            if (error instanceof MySqlApplicationService.ApplicationError) {
+                return res.status(error.status).json({ success: false, code: error.code, message: error.message });
+            }
+            console.error('MySQL vacancy read failed:', error.message);
+            return res.status(500).json({ success: false, message: 'Job openings could not be loaded from the database.' });
+        }
+    }
+    return getDashboardData(req, res);
 };
 
 // Return the latest Android and Windows installers from the shared app folder.
@@ -545,6 +589,29 @@ const markAttendance = async (req, res) => {
 
 // 3. APPLY FOR JOB
 const applyForJob = async (req, res) => {
+    if (String(process.env.MYSQL_JOB_APPLICATIONS_ENABLED || '').trim().toLowerCase() === 'true') {
+        try {
+            const result = await MySqlApplicationService.applyForOpening({
+                email: req.user?.email,
+                jobId: req.body?.jobId,
+            });
+            return res.status(200).json({
+                success: true,
+                message: 'Applied successfully!',
+                applicationId: result.applicationId,
+            });
+        } catch (error) {
+            if (error instanceof MySqlApplicationService.ApplicationError) {
+                return res.status(error.status).json({ success: false, code: error.code, message: error.message });
+            }
+            console.error('MySQL job application save failed:', error.message);
+            return res.status(500).json({
+                success: false,
+                code: 'APPLICATION_SAVE_FAILED',
+                message: 'Your application could not be saved. Please try again, or contact your Placement Officer if the problem continues.',
+            });
+        }
+    }
     try {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
@@ -616,6 +683,32 @@ const applyForJob = async (req, res) => {
 
 // 4. UPDATE PROFILE (Uses ConnectSheet directly for Batch Updates)
 const updateProfile = async (req, res) => {
+    if (usesMysqlStudentProfile()) {
+        const email = normalize(req.user?.email);
+        if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
+        const { age, gender, studyStatus, completedDate, stream, homeTown, fresherStatus, qualification, linkedin, instagram, placementReq, parentName, parentContact } = req.body || {};
+        const numericAge = Number(age);
+        const savedAge = age && Number.isFinite(numericAge) ? String(numericAge) : 'N/A';
+        try {
+            const result = await mysqlStudentProfileService.updateProfile({
+                email,
+                requestId: req.portalAuditRequestId,
+                values: {
+                    homeTown, qualification, stream, fresherStatus, linkedin, instagram, placementReq,
+                    parentName, parentContact, studyStatus: studyStatus || 'Currently Studying',
+                    completedDate: formatDateInputIndia(completedDate) || 'N/A', age: savedAge, gender,
+                },
+            });
+            return res.status(200).json({ success: true, message: 'Profile updated successfully!', user: result.user });
+        } catch (error) {
+            console.error('MySQL student profile update failed:', error.message);
+            return res.status(error.status || 503).json({
+                success: false,
+                code: error.code || 'STUDENT_PROFILE_UPDATE_FAILED',
+                message: error.status ? error.message : 'Failed to update profile. Please try again.',
+            });
+        }
+    }
     try {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
@@ -669,7 +762,9 @@ const uploadDocument = async (req, res) => {
     try {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
-        const student = await findStudent(email);
+        const student = usesMysqlStudentProfile()
+            ? await mysqlStudentProfileService.getStudentByEmail(email)
+            : await findStudent(email);
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
         const { base64, docType } = req.body;
         const dataUrlMatch = typeof base64 === 'string' && base64.match(/^data:([^;,]+);base64,([\s\S]+)$/i);
@@ -696,6 +791,15 @@ const uploadDocument = async (req, res) => {
             return res.status(502).json({ success: false, message: response.data?.message || 'The file could not be saved to Drive.' });
         }
 
+        const versionedUrl = new URL(uploadedUrl);
+        versionedUrl.searchParams.set('v', String(Date.now()));
+        if (usesMysqlStudentProfile()) {
+            await mysqlStudentProfileService.saveDocument({
+                email, docType, url: versionedUrl.toString(), requestId: req.portalAuditRequestId,
+            });
+            return res.status(200).json({ success: true, message: `${docType} uploaded successfully!`, url: versionedUrl.toString() });
+        }
+
         const { googleSheets, auth } = await connectSheet();
         const spreadsheetId = DatabaseService.getSpreadsheetId('Data!A:D');
         const rows = await DatabaseService.getSheetData('Data!A:D');
@@ -710,8 +814,6 @@ const uploadDocument = async (req, res) => {
             return res.status(404).json({ success: false, message: 'The uploaded file could not be linked to your student profile.' });
         }
 
-        const versionedUrl = new URL(uploadedUrl);
-        versionedUrl.searchParams.set('v', String(Date.now()));
         const columnLetter = docType === 'Photo' ? 'J' : (docType === 'Resume' ? 'V' : 'AC');
         await DatabaseService.withRetry(() => googleSheets.spreadsheets.values.update({
             auth,
@@ -770,6 +872,26 @@ const updatePassword = async (req, res) => {
 
 // 7. SUBMIT ISSUE
 const submitIssue = async (req, res) => {
+    if (usesMysqlSupportIssues()) {
+        try {
+            const email = String(req.user?.email || '').trim().toLowerCase();
+            if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
+            const result = await mysqlSupportIssueService.submitStudentIssue({
+                email,
+                details: req.body?.issueDetails,
+                location: req.body?.location || 'Student Portal',
+                requestId: req.portalAuditRequestId,
+            });
+            return res.status(200).json({ success: true, message: result.message });
+        } catch (error) {
+            console.error('MySQL support issue submission failed:', error.message);
+            return res.status(error.status || 503).json({
+                success: false,
+                code: error.code || 'SUPPORT_ISSUE_UNAVAILABLE',
+                message: error.status ? error.message : 'Failed to submit the issue. Please try again.',
+            });
+        }
+    }
     try {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
@@ -787,6 +909,38 @@ const submitIssue = async (req, res) => {
 
 // 8. SUBMIT DRIVE RESPONSE
 const submitDriveResponse = async (req, res) => {
+    if (usesMysqlStudentDrives()) {
+        try {
+            const email = normalize(req.user?.email);
+            if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
+            const { driveId, title, status } = req.body || {};
+            const result = await mysqlStudentDriveService.submitDriveResponse({
+                email, driveId: driveId || title, status, requestId: req.portalAuditRequestId,
+            });
+            if (result.status === 'Registered' && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+                try {
+                    const safeName = String(result.studentName).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+                    const safeTitle = String(result.eventTitle).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+                    await createEmailTransport().sendMail({
+                        from: getEmailFrom(),
+                        to: result.email,
+                        cc: result.tpoEmail,
+                        subject: `Drive Registration Confirmed: ${safeTitle}`,
+                        html: `<div style="font-family:Arial,sans-serif;padding:20px"><div style="max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:10px;border-top:5px solid #38bdf8"><h2>Registration Successful!</h2><p>Dear <strong>${safeName}</strong>,</p><p>You have successfully registered for the placement drive: <strong>${safeTitle}</strong>.</p><p><strong>Drive ID:</strong> ${String(result.eventId).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char])}<br><strong>Location:</strong> ${String(result.eventLocation).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char])}</p><p>Please carry a physical copy of your resume and arrive on time in formal attire.</p></div></div>`,
+                    });
+                } catch (mailError) {
+                    console.error('Drive registration email could not be sent:', mailError.message);
+                }
+            }
+            return res.status(200).json({ success: true, message: result.message });
+        } catch (error) {
+            if (error instanceof mysqlStudentDriveService.StudentDriveError) {
+                return res.status(error.status).json({ success: false, code: error.code, message: error.message });
+            }
+            console.error('MySQL drive response could not be saved:', error.message);
+            return res.status(503).json({ success: false, message: 'Failed to record response.' });
+        }
+    }
     try {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
@@ -846,4 +1000,4 @@ const submitDriveResponse = async (req, res) => {
     }
 };
 
-module.exports = { getDashboardData, getDriveAlerts, getAppDownloads, createAppDownloadLink, streamAppDownload, markAttendance, applyForJob, updateProfile, uploadDocument, updatePassword, submitIssue, submitDriveResponse };
+module.exports = { getDashboardData, getVacancyData, getDriveAlerts, getAppDownloads, createAppDownloadLink, streamAppDownload, markAttendance, applyForJob, updateProfile, uploadDocument, updatePassword, submitIssue, submitDriveResponse };

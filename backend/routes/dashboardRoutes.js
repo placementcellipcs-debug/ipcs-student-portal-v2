@@ -7,6 +7,7 @@ const authenticateToken = require('../middleware/authMiddleware');
 
 // Dashboard endpoints (Protected by JWT Token)
 router.post('/data', authenticateToken, dashboardController.getDashboardData);
+router.get('/vacancies', authenticateToken, dashboardController.getVacancyData);
 router.get('/drive-alerts', authenticateToken, dashboardController.getDriveAlerts);
 router.get('/app-downloads', authenticateToken, dashboardController.getAppDownloads);
 router.post('/app-downloads/:type/download-link', authenticateToken, dashboardController.createAppDownloadLink);

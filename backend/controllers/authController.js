@@ -8,6 +8,9 @@ const path = require('path');
 const AuthSessionService = require('../services/authSessionService');
 const { createEmailTransport, getEmailFrom } = require('../services/emailTransport');
 const { formatDateTimeIndia, formatDateInputIndia, parsePortalDateTime } = require('../utils/portalDateTime');
+const MysqlStudentAuth = require('../services/mysqlStudentAuthService');
+
+const usesMysqlStudentAuth = () => String(process.env.MYSQL_STUDENT_AUTH_ENABLED || '').trim().toLowerCase() === 'true';
 
 const RESET_TOKEN_TTL_MS = 5 * 60 * 1000;
 const RESET_SHEET = 'Password_Reset_Tokens';
@@ -69,6 +72,25 @@ const buildResetEmail = ({ name, resetLink, includeLogo }) => {
     };
 };
 
+const uploadRegistrationPhoto = async (formData) => {
+    if (!formData?.photoBase64 || !process.env.APPS_SCRIPT_PHOTO_URL) return '';
+    try {
+        const response = await axios.post(process.env.APPS_SCRIPT_PHOTO_URL, {
+            action: 'uploadOnly',
+            base64: String(formData.photoBase64).replace(/^data:image\/\w+;base64,/, ''),
+            filename: `${formData.rollNo || 'Profile'}_Profile.jpg`,
+            folderName: 'Profile Photo',
+            mimeType: 'image/jpeg',
+            folderId: process.env.DRIVE_FOLDER_ID,
+            parentFolderId: process.env.DRIVE_FOLDER_ID,
+        }, { timeout: 30000 });
+        return response.data?.success ? String(response.data.url || '') : '';
+    } catch (error) {
+        console.error('Photo upload error:', error.message);
+        return '';
+    }
+};
+
 const sendResetEmailThroughNodemailer = async ({ recipient, emailContent }) => {
     const transporter = createEmailTransport();
     await transporter.sendMail({
@@ -105,6 +127,35 @@ const requestPasswordReset = async (req, res) => {
         const email = String(req.body?.email || '').trim().toLowerCase();
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             return res.status(400).json({ success: false, message: 'Enter a valid student email address.' });
+        }
+
+        if (usesMysqlStudentAuth()) {
+            const hasSmtpSettings = Boolean(String(process.env.EMAIL_USER || '').trim() && String(process.env.EMAIL_PASS || '').trim());
+            if (!hasSmtpSettings) {
+                return res.status(503).json({ success: false, message: 'Hostinger email is not configured. Please contact your portal administrator.' });
+            }
+            const token = crypto.randomBytes(32).toString('hex');
+            const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+            const createdAt = new Date();
+            const expiresAt = new Date(createdAt.getTime() + RESET_TOKEN_TTL_MS);
+            const student = await MysqlStudentAuth.createPasswordReset({ email, tokenHash, expiresAt });
+            if (!student) return res.status(404).json({ success: false, code: 'ACCOUNT_NOT_FOUND', message: 'Student account not found. Check the email address registered with IPCS Global.' });
+            const baseUrl = String(process.env.RESET_PASSWORD_BASE_URL || 'https://ipcstalenzo.com')
+                .split(',')[0].trim().replace(/\/+$/, '');
+            const resetLink = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+            const logoPath = path.resolve(__dirname, '../../frontend/src/assets/ipcs-global-logo.png');
+            const includeLogo = fs.existsSync(logoPath);
+            const emailContent = { ...buildResetEmail({ name: student.name, resetLink, includeLogo }), logoPath: includeLogo ? logoPath : '' };
+            try {
+                await deliverPasswordResetEmail({ recipient: student.email, emailContent });
+            } catch (mailError) {
+                console.error('Password reset email failed through all configured providers:', mailError.message);
+                await MysqlStudentAuth.failPasswordResetEmail(tokenHash).catch(statusError => {
+                    console.error('Could not mark failed MySQL password reset email:', statusError.message);
+                });
+                return res.status(503).json({ success: false, message: 'The reset email could not be sent right now. Please try again later.' });
+            }
+            return res.status(200).json({ success: true, message: 'A password reset link has been sent to your registered email. It expires in 5 minutes.' });
         }
 
         const studentRows = await DatabaseService.getSheetData('Data!B:D', 0);
@@ -165,6 +216,13 @@ const resetPassword = async (req, res) => {
     if (activeResetTokens.has(tokenHash)) return res.status(409).json({ success: false, message: 'This reset link is already being used. Please wait a moment.' });
     activeResetTokens.add(tokenHash);
     try {
+        if (usesMysqlStudentAuth()) {
+            const salt = await bcrypt.genSalt(10);
+            const passwordHash = await bcrypt.hash(newPassword, salt);
+            const reset = await MysqlStudentAuth.completePasswordReset({ tokenHash, passwordHash });
+            if (!reset) return res.status(400).json({ success: false, message: 'This password reset link is invalid or has expired. Request a new link and try again.' });
+            return res.status(200).json({ success: true, message: 'Password updated. Please sign in again; active sessions on your other devices have been signed out.' });
+        }
         await ensureResetSheet();
         const resetRows = await DatabaseService.getSheetData(`${RESET_SHEET}!A:E`, 0);
         let latestRecord = null;
@@ -224,6 +282,16 @@ const loginUser = async (req, res) => {
         const email = String(req.body?.email || '').trim().toLowerCase();
         const password = String(req.body?.password || '');
         if (!email || !password) return res.status(400).json({ success: false, message: "Email and password are required." });
+        if (usesMysqlStudentAuth()) {
+            if (!process.env.JWT_SECRET) return res.status(503).json({ success: false, message: 'Student login is temporarily unavailable. Please contact IPCS support.' });
+            const result = await MysqlStudentAuth.loginStudent({ email, password });
+            const token = jwt.sign(
+                { email: result.user.email, rollNo: result.user.rollNo, branch: result.user.branch, sv: result.sessionVersion },
+                process.env.JWT_SECRET,
+                { expiresIn: '7d' },
+            );
+            return res.status(200).json({ success: true, message: 'Login successful!', token, user: result.user });
+        }
         if (!DatabaseService.hasSpreadsheetId('Data!A:AG') || !process.env.JWT_SECRET) {
             console.error('[auth/login] STUDENT_DATA_SPREADSHEET_ID or JWT_SECRET is not configured.');
             return res.status(503).json({ success: false, message: 'Student login is temporarily unavailable. Please contact IPCS support.' });
@@ -290,6 +358,7 @@ const loginUser = async (req, res) => {
         );
         return res.status(200).json({ success: true, message: "Login successful!", token, user: userObj });
     } catch (error) {
+        if (error?.status) return res.status(error.status).json({ success: false, code: error.code || 'STUDENT_LOGIN_FAILED', message: error.message });
         console.error('[auth/login] Login request failed:', {
             code: error?.code || null,
             status: error?.response?.status || null,
@@ -305,6 +374,17 @@ const registerUser = async (req, res) => {
         const cleanEmail = String(formData.email || '').trim().toLowerCase();
         if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || !formData.password) {
             return res.status(400).json({ success: false, message: 'Enter a valid email address and password.' });
+        }
+        if (usesMysqlStudentAuth()) {
+            if (!process.env.JWT_SECRET) return res.status(503).json({ success: false, message: 'Registration is temporarily unavailable. Please contact IPCS support.' });
+            const photoUrl = await uploadRegistrationPhoto(formData);
+            const result = await MysqlStudentAuth.registerStudent({ input: formData, email: cleanEmail, photoUrl });
+            const token = jwt.sign(
+                { email: result.user.email, rollNo: result.user.rollNo, branch: result.user.branch, sv: result.sessionVersion },
+                process.env.JWT_SECRET,
+                { expiresIn: '7d' },
+            );
+            return res.status(201).json({ success: true, message: 'Account created and saved!', token, userObj: result.user });
         }
         if (!DatabaseService.hasSpreadsheetId('Data!A:AG') || !process.env.JWT_SECRET) {
             console.error('[auth/register] STUDENT_DATA_SPREADSHEET_ID or JWT_SECRET is not configured.');
@@ -375,6 +455,7 @@ const registerUser = async (req, res) => {
 
         return res.status(201).json({ success: true, message: "Account created and saved!", token, userObj });
     } catch (error) { 
+        if (error?.status) return res.status(error.status).json({ success: false, code: error.code || 'REGISTRATION_FAILED', message: error.message });
         console.error('[auth/register] Registration failed:', {
             code: error?.code || null,
             status: error?.response?.status || null,
@@ -386,6 +467,10 @@ const registerUser = async (req, res) => {
 
 const getCourses = async (req, res) => {
     try {
+        if (usesMysqlStudentAuth()) {
+            const groupedCourses = await MysqlStudentAuth.getCourses();
+            return res.status(200).json({ success: true, groupedCourses });
+        }
         const rows = await DatabaseService.getSheetData("Courses!A:B");
         let groupedCourses = [];
         let currentCategory = "General";
@@ -409,6 +494,10 @@ const getCourses = async (req, res) => {
 
 const getBranches = async (req, res) => {
     try {
+        if (usesMysqlStudentAuth()) {
+            const groupedBranches = await MysqlStudentAuth.getBranches();
+            return res.status(200).json({ success: true, groupedBranches });
+        }
         const rows = await DatabaseService.getSheetData("Branches!B:C");
         let groupedBranches = [];
         

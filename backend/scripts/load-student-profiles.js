@@ -33,6 +33,47 @@ function makeId(scope, key) {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+function formatTime(hourText, minuteText, secondText, meridiemText) {
+    if (hourText === undefined) return '00:00:00';
+    let hour = Number(hourText);
+    const minute = Number(minuteText);
+    const second = Number(secondText || 0);
+    const meridiem = String(meridiemText || '').toLowerCase();
+    if (minute > 59 || second > 59 || hour > (meridiem ? 12 : 23) || (meridiem && hour === 0)) return '00:00:00';
+    if (meridiem === 'pm' && hour < 12) hour += 12;
+    if (meridiem === 'am' && hour === 12) hour = 0;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
+}
+
+function parseCreatedAt(value) {
+    const raw = asText(value);
+    if (!raw) return null;
+
+    let year; let month; let day; let time;
+    let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[, T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
+    if (match) {
+        [, year, month, day] = match;
+        time = formatTime(match[4], match[5], match[6], match[7]);
+    } else {
+        match = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[, T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
+        if (!match) return null;
+        // The source workbook is formatted for the portal's India locale (DD/MM/YYYY).
+        [, day, month, year] = match;
+        time = formatTime(match[4], match[5], match[6], match[7]);
+    }
+
+    const parts = [Number(year), Number(month), Number(day)];
+    const check = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    if (check.getUTCFullYear() !== parts[0] || check.getUTCMonth() !== parts[1] - 1 || check.getUTCDate() !== parts[2]) return null;
+    return `${String(parts[0]).padStart(4, '0')}-${String(parts[1]).padStart(2, '0')}-${String(parts[2]).padStart(2, '0')} ${time}`;
+}
+
+function comparableDateTime(value) {
+    if (!value) return null;
+    if (value instanceof Date) return value.toISOString().slice(0, 19).replace('T', ' ');
+    return String(value).slice(0, 19).replace('T', ' ');
+}
+
 function safeFields(fields) {
     return Object.fromEntries(Object.entries(fields || {}).filter(([name]) => !/password|secret|token/i.test(name)));
 }
@@ -60,7 +101,8 @@ async function main() {
             connection.execute(
                 `SELECT sp.id, sp.normalized_roll_number, sp.roll_number, sp.course_id, sp.branch_id,
                         sp.personal_email, sp.phone, sp.resume_url, sp.profile_photo_url, sp.status, sp.metadata,
-                        u.email AS user_email, u.full_name AS user_full_name, u.phone AS user_phone, u.status AS user_status
+                        sp.created_at, u.email AS user_email, u.full_name AS user_full_name, u.phone AS user_phone,
+                        u.status AS user_status, u.created_at AS user_created_at
                    FROM student_profiles sp LEFT JOIN users u ON u.id = sp.user_id`,
             ).then(([rows]) => rows),
         ]);
@@ -104,6 +146,7 @@ async function main() {
 
             return [{
                 rowNumber,
+                createdAt: parseCreatedAt(getField(data, 'Timestamp', 'Created At', 'Account Created At')),
                 roll: roll.slice(0, 100),
                 rollKey: rollKey.slice(0, 100),
                 profileId: makeId('student-profile', rollKey),
@@ -152,6 +195,7 @@ async function main() {
                 || (existing.phone || null) !== (candidate.phone || null)
                 || (existing.resume_url || null) !== (candidate.resume || null)
                 || (existing.profile_photo_url || null) !== (candidate.photo || null)
+                || (candidate.createdAt && comparableDateTime(existing.created_at) !== candidate.createdAt)
                 || existing.status !== candidate.status
                 || JSON.stringify(stableJson(existingMetadata.fields || {})) !== JSON.stringify(stableJson(parseJson(candidate.metadata).fields || {}));
             if (profileFieldsChanged) existingSourceProfilesWithChanges += 1;
@@ -159,6 +203,7 @@ async function main() {
                 (normalized(existing.user_email) || '') !== candidate.emailKey
                 || existing.user_full_name !== candidate.name
                 || (existing.user_phone || null) !== (candidate.phone || null)
+                || (candidate.createdAt && comparableDateTime(existing.user_created_at) !== candidate.createdAt)
                 || existing.user_status !== candidate.status
             )) existingStudentLoginsWithChanges += 1;
         }
@@ -181,6 +226,8 @@ async function main() {
             validUniqueRollRowsWithMissingOrInvalidEmail: candidates.filter(row => !isEmail(row.email)).length,
             validUniqueRollRowsWithoutBcryptPassword: candidates.filter(row => !row.hasBcryptPassword).length,
             validUniqueRollRowsWithoutName: candidates.filter(row => !row.name).length,
+            validUniqueRollRowsWithAccountCreatedAt: candidates.filter(row => row.createdAt).length,
+            validUniqueRollRowsWithUnrecognizedAccountCreatedAt: candidates.filter(row => !row.createdAt).length,
         };
 
         if (!apply) {
@@ -195,14 +242,14 @@ async function main() {
             if (student.userId && student.passwordHash) {
                 await connection.execute(
                     `INSERT INTO users (id, email, normalized_email, password_hash, session_version, role, full_name, phone,
-                                        sitting_branch_id, status, metadata)
-                     VALUES (?, ?, ?, ?, ?, 'student', ?, ?, ?, ?, ?)
+                                        sitting_branch_id, status, metadata, created_at)
+                     VALUES (?, ?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
                      ON DUPLICATE KEY UPDATE
                        email = VALUES(email), password_hash = VALUES(password_hash), session_version = VALUES(session_version), role = 'student',
                        full_name = VALUES(full_name), phone = VALUES(phone), sitting_branch_id = VALUES(sitting_branch_id),
-                       status = VALUES(status), metadata = VALUES(metadata)`,
+                       status = VALUES(status), metadata = VALUES(metadata), created_at = COALESCE(VALUES(created_at), created_at)`,
                     [student.userId, student.email, student.emailKey, student.passwordHash, student.sessionVersion,
-                        student.name, student.phone, student.branchId, student.status, student.metadata],
+                        student.name, student.phone, student.branchId, student.status, student.metadata, student.createdAt],
                 );
                 accountsLinked += 1;
             }
@@ -210,15 +257,15 @@ async function main() {
             await connection.execute(
                 `INSERT INTO student_profiles
                     (id, user_id, roll_number, normalized_roll_number, course_id, branch_id, personal_email,
-                     phone, resume_url, profile_photo_url, status, metadata)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     phone, resume_url, profile_photo_url, status, metadata, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
                  ON DUPLICATE KEY UPDATE
                     user_id = VALUES(user_id), roll_number = VALUES(roll_number), course_id = VALUES(course_id),
                     branch_id = VALUES(branch_id), personal_email = VALUES(personal_email), phone = VALUES(phone),
                     resume_url = VALUES(resume_url), profile_photo_url = VALUES(profile_photo_url),
-                    status = VALUES(status), metadata = VALUES(metadata)`,
+                    status = VALUES(status), metadata = VALUES(metadata), created_at = COALESCE(VALUES(created_at), created_at)`,
                 [student.profileId, student.userId, student.roll, student.rollKey, student.courseId, student.branchId,
-                    student.email, student.phone, student.resume, student.photo, student.status, student.metadata],
+                    student.email, student.phone, student.resume, student.photo, student.status, student.metadata, student.createdAt],
             );
         }
         await connection.commit();

@@ -79,8 +79,9 @@ async function main() {
     const pool = mysqlPool.getPool();
     const connection = await pool.getConnection();
     try {
-        const [runs] = await connection.execute('SELECT status FROM source_import_runs ORDER BY started_at DESC LIMIT 1');
+        const [runs] = await connection.execute('SELECT id, status FROM source_import_runs ORDER BY started_at DESC LIMIT 1');
         if (runs[0]?.status !== 'completed') throw new Error('Import and verify the source-sheet snapshot first.');
+        const importRunId = runs[0].id;
         const [sourceRows, studentRows, branchRows, courseRows, userRows] = await Promise.all([
             loadRows(connection),
             connection.execute('SELECT id, normalized_roll_number FROM student_profiles').then(([rows]) => rows),
@@ -121,6 +122,11 @@ async function main() {
                 metadata,
             };
         }).filter(Boolean);
+        const currentKeys = new Set(candidates.map(row => row.key));
+        const [existingSnapshotRows] = await connection.execute(
+            "SELECT source_record_key FROM placement_outcomes WHERE source = 'google_sheets_snapshot'",
+        );
+        const staleSourceRows = existingSnapshotRows.filter(row => !currentKeys.has(row.source_record_key));
 
         const report = {
             mode: apply ? 'apply' : 'preview',
@@ -133,6 +139,7 @@ async function main() {
             ownerLabelsNeedingReview: candidates.filter(row => row.ownerUnmatched).length,
             missingOrUnrecognizedPlacementDate: candidates.filter(row => !row.placementDate).length,
             packageValueNotParsed: candidates.filter(row => row.packageLpa === null).length,
+            sourceRowsRemovedSincePreviousCaptureRetainedAsHistory: staleSourceRows.length,
         };
 
         if (!apply) {
@@ -160,17 +167,30 @@ async function main() {
                     row.recordedByUserId, row.key, row.metadata],
             );
         }
+        if (candidates.length) {
+            const placeholders = candidates.map(() => '?').join(',');
+            await connection.execute(
+                `UPDATE placement_outcomes
+                 SET source = 'superseded_sheet_snapshot',
+                     metadata = JSON_SET(COALESCE(metadata, JSON_OBJECT()), '$.archiveState', 'removed_from_current_sheet', '$.supersededByImportRun', ?)
+                 WHERE source = 'google_sheets_snapshot' AND source_record_key NOT IN (${placeholders})`,
+                [importRunId, ...[...currentKeys]],
+            );
+        }
         await connection.commit();
         const [[counts]] = await connection.execute(
-            `SELECT COUNT(*) AS total_rows, SUM(student_id IS NOT NULL) AS student_links,
-                    SUM(recorded_by_user_id IS NOT NULL) AS tpo_links
-             FROM placement_outcomes WHERE source = 'google_sheets_snapshot'`,
+            `SELECT SUM(source = 'google_sheets_snapshot') AS total_rows,
+                    SUM(source = 'superseded_sheet_snapshot') AS superseded_rows,
+                    SUM(source = 'google_sheets_snapshot' AND student_id IS NOT NULL) AS student_links,
+                    SUM(source = 'google_sheets_snapshot' AND recorded_by_user_id IS NOT NULL) AS tpo_links
+             FROM placement_outcomes`,
         );
         console.log(JSON.stringify({
             ...report,
             status: 'completed',
             normalizedTableNowContains: {
                 placementRows: Number(counts.total_rows),
+                supersededHistoricalRowsRetained: Number(counts.superseded_rows || 0),
                 linkedStudentProfiles: Number(counts.student_links || 0),
                 linkedTpoOwners: Number(counts.tpo_links || 0),
             },

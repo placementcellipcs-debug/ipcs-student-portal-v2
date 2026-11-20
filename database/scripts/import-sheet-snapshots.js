@@ -37,6 +37,10 @@ const configuredWorkbooks = [
     ['TPO Portal', 'LEARNING_SPREADSHEET_ID', tpoEnv.LEARNING_SPREADSHEET_ID, tpoAuth],
     ['TPO Portal', 'OPERATIONS_SPREADSHEET_ID', tpoEnv.OPERATIONS_SPREADSHEET_ID, tpoAuth],
     ['TPO Portal', 'ACADEMIC_SPREADSHEET_ID', tpoEnv.ACADEMIC_SPREADSHEET_ID || '1mhTuK_3dXLKk1DcUCTA7KFWHiCKirwmYP6l7wMLYPlo', tpoAuth],
+    // Design Studio keeps its own workbook in the TPO backend. Include it in
+    // the one-time archive so its active tasks, uploads, categories, social
+    // posts, activity, and settings can be reconciled before MySQL cutover.
+    ['TPO Portal', 'DESIGN_SPREADSHEET_ID', tpoEnv.DESIGN_SPREADSHEET_ID || '149BVIP9GDXjPx3QYWE_b_6Wt4-J4Slu0kfYWWubu8sI', tpoAuth],
     ['TPO Portal', 'PORTAL_AUDIT_SPREADSHEET_ID', tpoEnv.PORTAL_AUDIT_SPREADSHEET_ID || '11FH7p5rYIc0EmKvT6fd0PIIoc2ns8Vj-EjksX1BLZ-w', tpoAuth],
     ['TPO Portal', 'ASSET_SPREADSHEET_ID', tpoEnv.ASSET_SPREADSHEET_ID, tpoAuth],
 ].filter(([, , spreadsheetId]) => String(spreadsheetId || '').trim());
@@ -136,6 +140,28 @@ function redactError(error) {
 async function insertRecords(pool, records) {
     for (let offset = 0; offset < records.length; offset += batchSize) {
         const batch = records.slice(offset, offset + batchSize);
+        const rowNumbers = batch.map(record => Number(record[2]));
+        const placeholders = rowNumbers.map(() => '?').join(',');
+        const [existing] = await pool.execute(
+            `SELECT sheet_row_number, imported_run_id, row_data_json, row_fingerprint
+             FROM source_sheet_records
+             WHERE source_key = ? AND tab_name = ? AND sheet_row_number IN (${placeholders})`,
+            [batch[0][0], batch[0][1], ...rowNumbers],
+        );
+        const nextFingerprints = new Map(batch.map(record => [Number(record[2]), String(record[4])]));
+        const changed = existing.filter(record => nextFingerprints.get(Number(record.sheet_row_number)) !== String(record.row_fingerprint));
+        if (changed.length) {
+            await pool.query(
+                `INSERT IGNORE INTO source_sheet_record_history
+                    (source_key, tab_name, sheet_row_number, source_import_run_id, replaced_by_import_run_id, row_data_json, row_fingerprint)
+                 VALUES ?`,
+                [changed.map(record => [
+                    batch[0][0], batch[0][1], Number(record.sheet_row_number), record.imported_run_id,
+                    batch[0][5], JSON.stringify(typeof record.row_data_json === 'string' ? JSON.parse(record.row_data_json) : record.row_data_json),
+                    record.row_fingerprint,
+                ])],
+            );
+        }
         await pool.query(
             `INSERT INTO source_sheet_records
                 (source_key, tab_name, sheet_row_number, row_data_json, row_fingerprint, imported_run_id)
@@ -200,6 +226,23 @@ async function main() {
                 const headers = headerRowIndex >= 0 ? (rows[headerRowIndex] || []).map(value => String(value ?? '')) : [];
                 const headerRowNumber = headerRowIndex >= 0 ? headerRowIndex + 1 : null;
                 const manifest = [sourceKey, tabName, JSON.stringify(source.sources), JSON.stringify(headers), headerRowNumber, 0, runId];
+                const [previousManifests] = await pool.execute(
+                    `SELECT imported_run_id, workbook_sources, headers_json, header_row_number, imported_record_count
+                     FROM source_sheet_manifest WHERE source_key = ? AND tab_name = ? LIMIT 1`,
+                    [sourceKey, tabName],
+                );
+                if (previousManifests.length && String(previousManifests[0].imported_run_id) !== runId) {
+                    const previous = previousManifests[0];
+                    await pool.execute(
+                        `INSERT IGNORE INTO source_sheet_manifest_history
+                            (source_key, tab_name, source_import_run_id, workbook_sources, headers_json, header_row_number, imported_record_count)
+                         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [sourceKey, tabName, previous.imported_run_id,
+                            typeof previous.workbook_sources === 'string' ? previous.workbook_sources : JSON.stringify(previous.workbook_sources),
+                            typeof previous.headers_json === 'string' ? previous.headers_json : JSON.stringify(previous.headers_json),
+                            previous.header_row_number, previous.imported_record_count],
+                    );
+                }
                 await pool.query(
                     `INSERT INTO source_sheet_manifest
                         (source_key, tab_name, workbook_sources, headers_json, header_row_number, imported_record_count, imported_run_id)
@@ -247,6 +290,14 @@ async function main() {
                 await pool.execute(
                     'UPDATE source_sheet_manifest SET imported_record_count = ? WHERE source_key = ? AND tab_name = ?',
                     [rows.filter((row, index) => index !== headerRowIndex && isNonemptyRow(row)).length, sourceKey, tabName],
+                );
+                await pool.execute(
+                    `INSERT IGNORE INTO source_sheet_record_history
+                        (source_key, tab_name, sheet_row_number, source_import_run_id, replaced_by_import_run_id, row_data_json, row_fingerprint)
+                     SELECT source_key, tab_name, sheet_row_number, imported_run_id, ?, row_data_json, row_fingerprint
+                     FROM source_sheet_records
+                     WHERE source_key = ? AND tab_name = ? AND imported_run_id <> ?`,
+                    [runId, sourceKey, tabName, runId],
                 );
                 await pool.execute(
                     'DELETE FROM source_sheet_records WHERE source_key = ? AND tab_name = ? AND imported_run_id <> ?',

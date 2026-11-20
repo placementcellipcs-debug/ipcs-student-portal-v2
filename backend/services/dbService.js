@@ -1,5 +1,6 @@
 const connectSheet = require('../config/db');
 const spreadsheetConfig = require('../config/spreadsheetConfig');
+const { assertGoogleSheetsWriteAllowed } = require('./mysqlSheetWriteGuard');
 const NodeCache = require('node-cache');
 
 const dbCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
@@ -55,6 +56,7 @@ class DatabaseService {
     }
 
     static async appendRow(range, rowData, targetSpreadsheetId) {
+        assertGoogleSheetsWriteAllowed();
         targetSpreadsheetId = this.getSpreadsheetId(range, targetSpreadsheetId);
         const { googleSheets, auth } = await connectSheet();
 
@@ -72,6 +74,7 @@ class DatabaseService {
     }
 
     static async appendRowRaw(range, rowData, targetSpreadsheetId) {
+        assertGoogleSheetsWriteAllowed();
         targetSpreadsheetId = this.getSpreadsheetId(range, targetSpreadsheetId);
         const { googleSheets, auth } = await connectSheet();
         const response = await this.withRetry(() => googleSheets.spreadsheets.values.append({
@@ -89,6 +92,7 @@ class DatabaseService {
     }
 
     static async ensureWorksheetWithHeaders(title, headers, targetSpreadsheetId) {
+        assertGoogleSheetsWriteAllowed();
         targetSpreadsheetId = this.getSpreadsheetId(title, targetSpreadsheetId);
         const { googleSheets, auth } = await connectSheet();
         const getMetadata = () => this.withRetry(() => googleSheets.spreadsheets.get({
@@ -144,6 +148,7 @@ class DatabaseService {
 
     // New method to update a specific row (used for GamePal streaks/scores)
     static async updateRow(range, rowData, targetSpreadsheetId) {
+        assertGoogleSheetsWriteAllowed();
         targetSpreadsheetId = this.getSpreadsheetId(range, targetSpreadsheetId);
         const { googleSheets, auth } = await connectSheet();
 
@@ -160,6 +165,7 @@ class DatabaseService {
     }
 
     static async updateRanges(updates, targetSpreadsheetId) {
+        assertGoogleSheetsWriteAllowed();
         const { googleSheets, auth } = await connectSheet();
         const updatesBySpreadsheet = new Map();
         for (const update of updates) {

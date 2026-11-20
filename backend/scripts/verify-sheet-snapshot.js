@@ -35,6 +35,16 @@ async function main() {
              FROM source_sheet_records
              GROUP BY source_key ORDER BY source_key`,
         );
+        const [[historyCounts]] = await pool.execute(
+            `SELECT COUNT(*) AS changed_or_removed_rows
+             FROM source_sheet_record_history WHERE replaced_by_import_run_id = ?`,
+            [latest.id],
+        );
+        const [[manifestHistoryCounts]] = await pool.execute(
+            `SELECT COUNT(*) AS previous_tab_manifests
+             FROM source_sheet_manifest_history WHERE source_import_run_id <> ?`,
+            [latest.id],
+        );
 
         console.log(JSON.stringify({
             latestRunStatus: latest.status,
@@ -47,6 +57,8 @@ async function main() {
             rowsFromLatestRun: Number(counts[0]?.rows_from_latest_run || 0),
             repeatedStudentRollNumbers: latest.repeated_student_roll_count,
             legacyPasswordsConverted: latest.password_hash_count,
+            priorRowVersionsKeptForLatestCapture: Number(historyCounts.changed_or_removed_rows || 0),
+            previousTabManifestsArchived: Number(manifestHistoryCounts.previous_tab_manifests || 0),
             tabsWithCountMismatch: mismatches.length,
         }));
         for (const sourceCount of sourceCounts) console.log(JSON.stringify(sourceCount));

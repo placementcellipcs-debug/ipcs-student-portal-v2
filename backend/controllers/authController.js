@@ -9,8 +9,9 @@ const AuthSessionService = require('../services/authSessionService');
 const { createEmailTransport, getEmailFrom } = require('../services/emailTransport');
 const { formatDateTimeIndia, formatDateInputIndia, parsePortalDateTime } = require('../utils/portalDateTime');
 const MysqlStudentAuth = require('../services/mysqlStudentAuthService');
+const { isMysqlFeatureEnabled } = require('../services/mysqlFeatureFlags');
 
-const usesMysqlStudentAuth = () => String(process.env.MYSQL_STUDENT_AUTH_ENABLED || '').trim().toLowerCase() === 'true';
+const usesMysqlStudentAuth = () => isMysqlFeatureEnabled('MYSQL_STUDENT_AUTH_ENABLED');
 
 const RESET_TOKEN_TTL_MS = 5 * 60 * 1000;
 const RESET_SHEET = 'Password_Reset_Tokens';

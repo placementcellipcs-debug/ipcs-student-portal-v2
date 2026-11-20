@@ -1,6 +1,10 @@
 const DatabaseService = require('../services/dbService');
 const crypto = require('crypto');
 const { formatDateIndia, formatDateTimeIndia, parsePortalDateTime } = require('../utils/portalDateTime');
+const mysqlGamePalService = require('../services/mysqlGamePalService');
+const { isMysqlFeatureEnabled } = require('../services/mysqlFeatureFlags');
+
+const usesMysqlGamePal = () => isMysqlFeatureEnabled('MYSQL_GAMEPAL_ENABLED');
 
 const CATEGORIES = ["Memory", "Attention", "Language", "Problem Solving", "Math", "Flexibility", "Speed"];
 const FRIEND_HEADERS = ['Challenge ID', 'Created At', 'Updated At', 'Game ID', 'Game Name', 'Creator Email', 'Creator Name', 'Opponent Email', 'Opponent Name', 'Creator Score', 'Creator Accuracy', 'Opponent Score', 'Opponent Accuracy', 'Status'];
@@ -121,6 +125,7 @@ const generateRoomCode = (existingCodes) => {
 };
 
 const getGroupRooms = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.getGroupRooms(req, res);
     try {
         const email = String(req.user?.email || '').trim().toLowerCase();
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
@@ -148,6 +153,7 @@ const getGroupRooms = async (req, res) => {
 };
 
 const createGroupRoom = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.createGroupRoom(req, res);
     try {
         const creatorEmail = String(req.user?.email || '').trim().toLowerCase();
         const gameId = String(req.body?.gameId || '').trim().toLowerCase();
@@ -179,6 +185,7 @@ const createGroupRoom = async (req, res) => {
 };
 
 const joinGroupRoom = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.joinGroupRoom(req, res);
     try {
         const email = String(req.user?.email || '').trim().toLowerCase();
         const code = String(req.params.code || '').trim().toUpperCase();
@@ -211,6 +218,7 @@ const joinGroupRoom = async (req, res) => {
 };
 
 const startGroupRoom = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.startGroupRoom(req, res);
     try {
         const email = String(req.user?.email || '').trim().toLowerCase();
         const code = String(req.params.code || '').trim().toUpperCase();
@@ -238,6 +246,7 @@ const startGroupRoom = async (req, res) => {
 };
 
 const submitGroupRoomScore = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.submitGroupRoomScore(req, res);
     try {
         const email = String(req.user?.email || '').trim().toLowerCase();
         const code = String(req.params.code || '').trim().toUpperCase();
@@ -273,6 +282,7 @@ const submitGroupRoomScore = async (req, res) => {
 };
 
 const getFriendChallenges = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.getFriendChallenges(req, res);
     try {
         const email = String(req.user?.email || '').trim().toLowerCase();
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
@@ -303,6 +313,7 @@ const getFriendChallenges = async (req, res) => {
 };
 
 const createFriendChallenge = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.createFriendChallenge(req, res);
     try {
         const creatorEmail = String(req.user?.email || '').trim().toLowerCase();
         const opponentEmail = String(req.body?.opponentEmail || '').trim().toLowerCase();
@@ -329,6 +340,7 @@ const createFriendChallenge = async (req, res) => {
 };
 
 const submitFriendChallengeScore = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.submitFriendChallengeScore(req, res);
     try {
         const email = String(req.user?.email || '').trim().toLowerCase();
         const challengeId = String(req.params.id || '').trim();
@@ -368,6 +380,7 @@ const submitFriendChallengeScore = async (req, res) => {
 };
 
 const getGamePalDashboard = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.getGamePalDashboard(req, res);
     try {
         const email = req.user?.email || req.body.email;
         const gamePalDbId = gamePalSpreadsheetId();
@@ -448,6 +461,7 @@ const getGamePalDashboard = async (req, res) => {
 };
 
 const submitGameSession = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.submitGameSession(req, res);
     try {
         const email = req.user?.email || req.body.email;
         const { name, rollNo, branch, gameName, category, score, accuracy, timeSeconds } = req.body;
@@ -523,6 +537,7 @@ const submitGameSession = async (req, res) => {
 };
 
 const getGamePalLeaderboard = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.getGamePalLeaderboard(req, res);
     try {
         const gamePalDbId = gamePalSpreadsheetId();
         const [rows, logRows] = await Promise.all([
@@ -558,6 +573,7 @@ const getGamePalLeaderboard = async (req, res) => {
 };
 
 const getGamePalHistory = async (req, res) => {
+    if (usesMysqlGamePal()) return mysqlGamePalService.getGamePalHistory(req, res);
     try {
         const email = String(req.user?.email || '').trim().toLowerCase();
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });

@@ -1,8 +1,9 @@
 const DatabaseService = require('../services/dbService');
 const { formatDateTimeIndia } = require('../utils/portalDateTime');
 const mysqlStudentLeave = require('../services/mysqlStudentLeaveService');
+const { isMysqlFeatureEnabled } = require('../services/mysqlFeatureFlags');
 
-const usesMysqlStudentLeave = () => String(process.env.MYSQL_STUDENT_LEAVE_ENABLED || '').trim().toLowerCase() === 'true';
+const usesMysqlStudentLeave = () => isMysqlFeatureEnabled('MYSQL_STUDENT_LEAVE_ENABLED');
 
 const SHEET_NAME = 'Leave_Applications';
 const SHEET_RANGE = `${SHEET_NAME}!A:K`;

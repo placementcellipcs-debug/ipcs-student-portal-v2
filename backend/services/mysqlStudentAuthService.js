@@ -133,6 +133,51 @@ async function loginStudent({ email, password, connection: suppliedConnection = 
     } finally { if (ownsConnection) connection.release(); }
 }
 
+async function changeStudentPassword({ email, currentPassword, newPassword, requestId, connection: suppliedConnection = null }) {
+    const normalizedEmail = normalized(email);
+    const current = String(currentPassword || '');
+    const next = String(newPassword || '');
+    if (!normalizedEmail) throw new StudentAuthError(401, 'SESSION_REQUIRED', 'Please sign in again.');
+    if (Buffer.byteLength(next, 'utf8') < 8 || Buffer.byteLength(next, 'utf8') > 72) {
+        throw new StudentAuthError(400, 'INVALID_PASSWORD', 'Choose a password between 8 and 72 bytes.');
+    }
+
+    const ownsConnection = !suppliedConnection;
+    const connection = suppliedConnection || await mysqlPool.getPool().getConnection();
+    try {
+        if (ownsConnection) await connection.beginTransaction();
+        const [rows] = await connection.execute(
+            `SELECT u.id, u.password_hash
+             FROM users u JOIN student_profiles sp ON sp.user_id = u.id
+             WHERE u.normalized_email = ? AND u.role = 'student'
+               AND u.status = 'active' AND sp.status = 'active'
+             LIMIT 2 FOR UPDATE`,
+            [normalizedEmail],
+        );
+        if (!rows.length) throw new StudentAuthError(404, 'ACCOUNT_NOT_FOUND', 'Student account not found.');
+        if (rows.length > 1) throw new StudentAuthError(409, 'ACCOUNT_AMBIGUOUS', 'This student account needs staff review before its password can be changed.');
+        let matches = false;
+        try { matches = await bcrypt.compare(current, String(rows[0].password_hash || '')); } catch { /* Invalid legacy hash. */ }
+        if (!matches) throw new StudentAuthError(400, 'CURRENT_PASSWORD_INCORRECT', 'Incorrect current password.');
+
+        const passwordHash = await bcrypt.hash(next, await bcrypt.genSalt(10));
+        await connection.execute(
+            'UPDATE users SET password_hash = ? WHERE id = ?',
+            [passwordHash, rows[0].id],
+        );
+        await connection.execute(
+            `INSERT INTO audit_events (id, actor_user_id, action, entity_type, entity_id, occurred_at, request_id, details)
+             VALUES (?, ?, 'student_password_changed', 'student', ?, UTC_TIMESTAMP(), ?, JSON_OBJECT('source', 'student_portal'))`,
+            [crypto.randomUUID(), rows[0].id, rows[0].id, String(requestId || '').trim() || null],
+        );
+        if (ownsConnection) await connection.commit();
+        return { changed: true };
+    } catch (error) {
+        if (ownsConnection) await connection.rollback().catch(() => {});
+        throw error;
+    } finally { if (ownsConnection) connection.release(); }
+}
+
 async function registerStudent({ input, email, photoUrl = '', connection: suppliedConnection = null }) {
     const normalizedEmail = normalized(email);
     const name = text(input.name);
@@ -302,6 +347,7 @@ async function completePasswordReset({ tokenHash, passwordHash, connection: supp
 
 module.exports = {
     StudentAuthError,
+    changeStudentPassword,
     completePasswordReset,
     createPasswordReset,
     failPasswordResetEmail,

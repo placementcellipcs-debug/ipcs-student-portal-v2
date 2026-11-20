@@ -1,5 +1,6 @@
 const DatabaseService = require('./dbService');
 const mysqlPool = require('../config/mysqlPool');
+const { isMysqlFeatureEnabled } = require('./mysqlFeatureFlags');
 const { formatDateTimeIndia } = require('../utils/portalDateTime');
 
 const SESSION_SHEET = 'Auth_Sessions';
@@ -7,7 +8,7 @@ const SESSION_HEADERS = ['Email', 'Session Version', 'Updated At'];
 let setupPromise = null;
 
 const cleanEmail = (email) => String(email || '').trim().toLowerCase();
-const usesMysqlAuth = () => String(process.env.MYSQL_STUDENT_AUTH_ENABLED || '').trim().toLowerCase() === 'true';
+const usesMysqlAuth = () => isMysqlFeatureEnabled('MYSQL_STUDENT_AUTH_ENABLED');
 
 const ensureSessionSheet = async () => {
     if (!setupPromise) {

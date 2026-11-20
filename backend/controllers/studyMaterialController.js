@@ -1,8 +1,13 @@
 const DatabaseService = require('../services/dbService');
+const mysqlLearningSourceService = require('../services/mysqlLearningSourceService');
 const { normalizeCourse, getCourseAccess, courseMatchesAccess } = require('../services/courseService');
 const crypto = require('crypto');
+const { isMysqlFeatureEnabled } = require('../services/mysqlFeatureFlags');
+
+const usesMysqlStudyMaterials = () => isMysqlFeatureEnabled('MYSQL_STUDY_MATERIALS_ENABLED');
 
 const getStudentMaterialAccess = async (email) => {
+    if (usesMysqlStudyMaterials()) return mysqlLearningSourceService.getStudentMaterialAccess(email);
     const [userDataRows, courseRows] = await Promise.all([
         DatabaseService.getSheetData('Data!A:AE', 60),
         DatabaseService.getSheetData('Courses!A:B', 300)
@@ -20,6 +25,10 @@ const getStudentMaterialAccess = async (email) => {
 
     return { allowed: true, courses: getCourseAccess(studentCourse, courseRows) };
 };
+
+const getStudyMaterialRows = async () => (usesMysqlStudyMaterials()
+    ? mysqlLearningSourceService.getArchivedTabRows('shared_learning', 'Study_Materials')
+    : DatabaseService.getSheetData('Study_Materials!A:G', 0));
 
 const materialMatchesStudent = (materialCourse, courseAccess) => {
     return courseMatchesAccess(materialCourse, courseAccess);
@@ -114,7 +123,7 @@ const getStudyMaterialsList = async (req, res) => {
 
         // Staff maintain this sheet directly, so don't hold a per-process copy
         // that can keep showing an old module-to-file mapping after edits.
-        const matData = await DatabaseService.getSheetData("Study_Materials!A:G", 0);
+        const matData = await getStudyMaterialRows();
         const allActiveMaterials = matData.slice(1)
             .map((row) => getActiveMaterial(row))
             .filter(Boolean);
@@ -137,7 +146,7 @@ const streamMaterialPdf = async (req, res) => {
             return res.status(403).json({ success: false, message: "Access Restricted: You do not have permission to view Study Materials." });
         }
 
-        const matData = await DatabaseService.getSheetData("Study_Materials!A:G", 0);
+        const matData = await getStudyMaterialRows();
         const allActiveMaterials = matData.slice(1).map(getActiveMaterial).filter(Boolean);
         const selectedMaterial = markDuplicateSources(allActiveMaterials).find((material) => (
             String(material.id) === String(materialId)

@@ -135,6 +135,11 @@ async function getVacancyData({ email, connection: suppliedConnection = null }) 
              FROM placement_tracker_records tr
              WHERE tr.student_id = ? AND tr.source_tab = 'Opening_Applied'
                AND LOWER(COALESCE(tr.status, '')) <> 'deleted'
+               AND NOT EXISTS (
+                 SELECT 1 FROM job_applications legacy
+                 WHERE legacy.source = 'legacy_opening_applied'
+                   AND legacy.student_id = tr.student_id AND legacy.vacancy_id = tr.vacancy_id
+               )
              ORDER BY occurred_at DESC`,
             [student.student_id, student.student_id],
         );

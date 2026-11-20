@@ -1,5 +1,9 @@
 const crypto = require('crypto');
 const DatabaseService = require('../services/dbService');
+const mysqlAssessmentService = require('../services/mysqlAssessmentService');
+const mysqlLearningSourceService = require('../services/mysqlLearningSourceService');
+const mysqlStudentProfileService = require('../services/mysqlStudentProfileService');
+const { isMysqlFeatureEnabled } = require('../services/mysqlFeatureFlags');
 const { getCourseAccess, courseMatchesAccess } = require('../services/courseService');
 const { formatDateTimeIndia } = require('../utils/portalDateTime');
 
@@ -8,10 +12,21 @@ const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const clean = (value) => String(value || '').trim();
 const isActive = (value) => !/inactive|^false$/i.test(clean(value || 'active'));
 const isEnabled = (value) => /^(yes|true|1)$/i.test(clean(value));
+const usesMysqlAssessments = () => isMysqlFeatureEnabled('MYSQL_ASSESSMENTS_ENABLED');
+const usesMysqlStudentProfiles = () => usesMysqlAssessments()
+    || isMysqlFeatureEnabled('MYSQL_STUDENT_PROFILE_ENABLED');
 
 const getStudent = async (email) => {
     const normalizedEmail = clean(email).toLowerCase();
     if (!normalizedEmail) return null;
+    if (usesMysqlStudentProfiles()) {
+        const profile = await mysqlStudentProfileService.getStudentByEmail(normalizedEmail);
+        if (!profile) return null;
+        return {
+            email: clean(profile.email), name: clean(profile.name) || 'Student', rollNo: clean(profile.rollNo) || 'N/A',
+            branch: clean(profile.branch) || 'N/A', course: clean(profile.course) || 'N/A', techExamAccess: profile.techExamAccess,
+        };
+    }
     const rows = await DatabaseService.getSheetData('Data!A:AG');
     const row = rows.slice(1).reverse().find((item) => clean(item[3]).toLowerCase() === normalizedEmail);
     if (!row) return null;
@@ -45,7 +60,9 @@ const getAptitudeTest = async (req, res) => {
     try {
         const student = await getStudent(req.user?.email);
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
-        const rows = await DatabaseService.getSheetData('Aptitude_Questions!A:K');
+        const rows = usesMysqlAssessments()
+            ? await mysqlAssessmentService.getQuestionRows('aptitude')
+            : await DatabaseService.getSheetData('Aptitude_Questions!A:K');
         const levels = { 1: [], 2: [], 3: [] };
 
         for (let i = 1; i < rows.length; i++) {
@@ -91,11 +108,13 @@ const saveAptitudeResult = async (req, res) => {
         const timeTaken = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
         const timestamp = formatDateTimeIndia();
 
-        await DatabaseService.appendRowRaw('Aptitude_Results!A:J', [
+        const resultRow = [
             timestamp, student.rollNo, student.name, student.email, student.branch,
             String(score), String(totalQuestions), `${percentage}%`, timeTaken,
             `Reached Level ${finalLevel} (${finalLevel === 1 ? 'Easy' : finalLevel === 2 ? 'Medium' : 'Hard'})`,
-        ]);
+        ];
+        if (usesMysqlAssessments()) await mysqlAssessmentService.appendResult('aptitude', resultRow);
+        else await DatabaseService.appendRowRaw('Aptitude_Results!A:J', resultRow);
         examSessions.delete(sessionId);
         return res.status(200).json({ success: true, message: 'Score registered.', score, correctCount, totalQuestions, percentage, timeTaken });
     } catch (error) {
@@ -106,7 +125,9 @@ const saveAptitudeResult = async (req, res) => {
 
 const getLeaderboard = async (req, res) => {
     try {
-        const rows = await DatabaseService.getSheetData('Aptitude_Results!A:J');
+        const rows = usesMysqlAssessments()
+            ? await mysqlAssessmentService.getResultRows('aptitude')
+            : await DatabaseService.getSheetData('Aptitude_Results!A:J');
         const studentData = {};
         for (let i = 1; i < rows.length; i++) {
             const email = clean(rows[i][3] || rows[i][2] || `Unknown-${i}`).toLowerCase();
@@ -133,11 +154,13 @@ const getLeaderboard = async (req, res) => {
 const getTestHistory = async (req, res) => {
     try {
         const email = clean(req.user?.email).toLowerCase();
-        const [aptRows, talRows, techRows] = await Promise.all([
-            DatabaseService.getSheetData('Aptitude_Results!A:J').catch(() => []),
-            DatabaseService.getSheetData('Talentino_Results!A:J').catch(() => []),
-            DatabaseService.getSheetData('Tech_Results!A:J').catch(() => []),
-        ]);
+        const [aptRows, talRows, techRows] = usesMysqlAssessments()
+            ? await mysqlAssessmentService.getResultRowsForAllTypes()
+            : await Promise.all([
+                DatabaseService.getSheetData('Aptitude_Results!A:J').catch(() => []),
+                DatabaseService.getSheetData('Talentino_Results!A:J').catch(() => []),
+                DatabaseService.getSheetData('Tech_Results!A:J').catch(() => []),
+            ]);
         const history = [];
         const parseRows = (rows, type) => {
             for (let i = rows.length - 1; i >= 1; i--) {
@@ -165,11 +188,19 @@ const getSpecificTest = async (req, res) => {
         if (type === 'talentino' && ![1, 2, 3].includes(parsedTestNum)) return res.status(400).json({ success: false, message: 'Invalid Talentino test.' });
         if (type === 'technical' && !isEnabled(student.techExamAccess)) return res.status(403).json({ success: false, message: 'Technical exam access has not been enabled for your account.' });
 
-        const [rows, history, courseRows] = await Promise.all([
-            DatabaseService.getSheetData(type === 'talentino' ? 'Talentino_Questions!A:K' : 'Tech_Questions!A:K'),
-            type === 'talentino' ? DatabaseService.getSheetData('Talentino_Results!A:J') : DatabaseService.getSheetData('Tech_Results!A:J'),
-            type === 'technical' ? DatabaseService.getSheetData('Courses!A:B', 300) : Promise.resolve([]),
-        ]);
+        const [rows, history, courseRows] = usesMysqlAssessments()
+            ? await Promise.all([
+                mysqlAssessmentService.getQuestionRows(type),
+                mysqlAssessmentService.getResultRows(type),
+                type === 'technical'
+                    ? mysqlLearningSourceService.getArchivedTabRows('shared_learning', 'Courses')
+                    : Promise.resolve([]),
+            ])
+            : await Promise.all([
+                DatabaseService.getSheetData(type === 'talentino' ? 'Talentino_Questions!A:K' : 'Tech_Questions!A:K'),
+                type === 'talentino' ? DatabaseService.getSheetData('Talentino_Results!A:J') : DatabaseService.getSheetData('Tech_Results!A:J'),
+                type === 'technical' ? DatabaseService.getSheetData('Courses!A:B', 300) : Promise.resolve([]),
+            ]);
         const isReview = req.body.isReview === true;
         const hasCompleted = history.slice(1).some((row) => clean(row[3]).toLowerCase() === student.email.toLowerCase()
             && clean(row[5]).toLowerCase() === (type === 'talentino' ? `Test ${parsedTestNum}`.toLowerCase() : student.course.toLowerCase()));
@@ -235,10 +266,12 @@ const submitSpecificTest = async (req, res) => {
         const timestamp = formatDateTimeIndia();
         const specificCol = session.type === 'talentino' ? `Test ${session.testNum}` : student.course;
         const sheetName = session.type === 'talentino' ? 'Talentino_Results!A:J' : 'Tech_Results!A:J';
-        await DatabaseService.appendRowRaw(sheetName, [
+        const resultRow = [
             timestamp, student.rollNo, student.name, student.email, student.branch, specificCol,
             String(correctCount), String(totalQuestions), `${percentage}%`, timeTaken,
-        ]);
+        ];
+        if (usesMysqlAssessments()) await mysqlAssessmentService.appendResult(session.type, resultRow);
+        else await DatabaseService.appendRowRaw(sheetName, resultRow);
         examSessions.delete(sessionId);
         return res.status(200).json({ success: true, message: 'Score registered.', score: correctCount, correctCount, totalQuestions, percentage, timeTaken });
     } catch (error) {

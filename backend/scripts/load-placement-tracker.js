@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const mysqlPool = require('../config/mysqlPool');
+const { parseSourceDateTime } = require('../utils/sourceDateTime');
 
 const asText = value => String(value ?? '').normalize('NFKC').trim();
 const normalized = value => asText(value).toLocaleLowerCase('en-US').replace(/\s+/g, ' ');
@@ -23,14 +24,6 @@ function makeId(scope, key) {
 
 function safeFields(fields) {
     return Object.fromEntries(Object.entries(fields || {}).filter(([name]) => !/password|secret|token/i.test(name)));
-}
-
-function parseDateTime(value) {
-    const text = asText(value);
-    if (!text) return null;
-    const parsed = new Date(text);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return parsed.toISOString().slice(0, 19).replace('T', ' ');
 }
 
 async function loadRows(connection, tabName) {
@@ -106,7 +99,7 @@ async function main() {
                 companyName: asText(getField(data, 'Company Name', 'Company')).slice(0, 240) || null,
                 positionTitle: asText(getField(data, 'Position', 'Title')).slice(0, 240) || null,
                 status: asText(getField(data, 'Status')).slice(0, 80) || null,
-                occurredAt: parseDateTime(timestamp),
+                occurredAt: parseSourceDateTime(timestamp),
                 metadata,
                 sourceRecordKey,
             };
@@ -125,6 +118,8 @@ async function main() {
                 linkedToUniqueStudentProfiles: rows.filter(row => row.studentId).length,
                 linkedToCurrentOpenings: rows.filter(row => row.vacancyId).length,
                 linkedToUnambiguousActiveTpos: rows.filter(row => row.ownerId).length,
+                rowsWithValidTimestamp: rows.filter(row => row.occurredAt).length,
+                rowsWithoutValidTimestamp: rows.filter(row => !row.occurredAt).length,
                 ownerNamesNeedingReview: rows.filter(row => row.ownerUnmatched).length,
                 rowsWithoutStudentOrOpeningLink: rows.filter(row => !row.studentId || !row.vacancyId).length,
             }];
@@ -137,6 +132,8 @@ async function main() {
             linkedToUniqueStudentProfiles: candidates.filter(row => row.studentId).length,
             linkedToCurrentOpenings: candidates.filter(row => row.vacancyId).length,
             linkedToUnambiguousActiveTpos: candidates.filter(row => row.ownerId).length,
+            rowsWithValidTimestamp: candidates.filter(row => row.occurredAt).length,
+            rowsWithoutValidTimestamp: candidates.filter(row => !row.occurredAt).length,
             ownerNamesNeedingReview: candidates.filter(row => row.ownerUnmatched).length,
             rowsKeptWithoutStudentOrOpeningLink: candidates.filter(row => !row.studentId || !row.vacancyId).length,
             repeatedStudentAndJobPairsRetained: [...pairCounts.values()].reduce((total, count) => total + Math.max(0, count - 1), 0),

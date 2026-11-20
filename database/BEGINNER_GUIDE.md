@@ -13,9 +13,9 @@ The website in Vercel should never connect directly to MySQL. The Render API is 
 
 ## What is ready
 
-- Hostinger's MariaDB 11.8 database is reachable from both backend projects over TLS. The password must be rotated because it appeared in a diagnostic output; both local password entries are now blank until you enter the replacement locally.
-- All 9 schema migrations have been applied to Hostinger.
-- A fresh read-only capture archived 8 workbooks, 103 tabs, and 352,927 rows. Every workbook tab count reconciled with the archive.
+- Hostinger's MariaDB 11.8 database is reachable from both backend projects over TLS. A previously exposed credential was replaced, and the replacement is saved only in each backend's local `.env` file. Never paste it into chat or commit it.
+- All 15 schema migrations have been applied to Hostinger.
+- The latest read-only capture archived 8 workbooks, 103 tabs, and 361,976 rows. The comparison found no changed cell values among those captured rows; 95 new audit entries arrived while the old portal was still writing. A final paused-write capture is needed to get a clean cutover point.
 - Initial normalized imports are in place for reference catalogs, staff, students, vacancies, targets, event/drive data, placement history, companies, deletion approvals, assets, leave requests, and support issues.
 - The local `ipcs_portal_dev` schema was dropped at your request. Other local schemas were left alone.
 - Several rows have duplicate or missing identifiers, so they were preserved in the archive and left unlinked instead of attaching them to the wrong student, TPO, company, or job.
@@ -23,11 +23,11 @@ The website in Vercel should never connect directly to MySQL. The Render API is 
 
 ## The safe order
 
-1. **Rotate the database password in Hostinger.** Enter the replacement privately in both portal `backend/.env` files on the `MYSQL_PASSWORD=` line. Do not paste it into chat or commit those files.
-2. **Resume normalized imports.** Reconnect using the new password, review importer previews and warnings, then continue remaining table imports and reconciliation.
-3. **Finish converting the portal.** Many features still read or write Sheets; migrate them and any mail/report schedules before a cutover.
-4. **Prepare Render.** Add the database settings to each backend's protected Render environment and allow Render's actual outbound addresses at the database provider. A PC allowlist alone does not cover Render.
-5. **Cut over after verification.** Deploy the MySQL-backed APIs and verify sign-in, permissions, student workflows, TPO workflows, email schedules, and report delivery. Keep the Sheets workbooks as a recovery copy until the cutover is reconciled.
+1. **Finish the remaining portal features.** Many screens and background jobs still read or write Sheets. Those paths need MySQL versions before Sheets can be retired.
+2. **Plan a short write pause.** The old portal keeps adding audit entries; briefly stop edits during the final source capture so every last row is included in one stable snapshot.
+3. **Refresh and compare.** Re-run the source import, then compare row positions and visible text. Password columns are secured as hashes, and formulas are stored as their displayed results.
+4. **Configure Render.** Put database settings in each backend's protected Render environment and allow Render's server addresses at Hostinger. A PC allowlist does not cover Render.
+5. **Switch after verification.** Deploy the MySQL-backed APIs, check sign-in and core Student/TPO workflows, email schedules, and reports. Keep the old sheets unchanged as a recovery copy until the switch is confirmed.
 
 ## Email stays separate from database passwords
 

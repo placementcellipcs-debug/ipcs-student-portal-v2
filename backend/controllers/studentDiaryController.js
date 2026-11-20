@@ -1,4 +1,6 @@
 const DatabaseService = require('../services/dbService');
+const mysqlStudentDiaryService = require('../services/mysqlStudentDiaryService');
+const { isMysqlFeatureEnabled } = require('../services/mysqlFeatureFlags');
 const { formatDateIndia, formatDateTimeIndia } = require('../utils/portalDateTime');
 
 const GEOFENCE_RADIUS_METERS = 1000;
@@ -8,6 +10,7 @@ const SHEET_HEADERS = [
     'Status', 'Topic', 'Syllabus Completed (%)', 'Remarks', 'Latitude', 'Longitude', 'Distance (m)',
 ];
 let worksheetSetupPromise;
+const usesMysqlStudentDiary = () => isMysqlFeatureEnabled('MYSQL_STUDENT_DIARY_ENABLED');
 
 const ensureDiaryWorksheet = () => {
     if (!worksheetSetupPromise) {
@@ -137,12 +140,22 @@ const getStudentDiary = async (req, res) => {
         const email = normalizeEmail(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
 
-        await ensureDiaryWorksheet();
-        const [studentRows, diaryRows] = await Promise.all([
-            DatabaseService.getSheetData('Data!A:AF'),
-            DatabaseService.getSheetData(SHEET_RANGE),
-        ]);
-        const student = findStudent(studentRows, email);
+        let student;
+        let diaryRows;
+        if (usesMysqlStudentDiary()) {
+            [student, diaryRows] = await Promise.all([
+                mysqlStudentDiaryService.getStudent(email),
+                mysqlStudentDiaryService.getStudentDiaryRows(email),
+            ]);
+        } else {
+            await ensureDiaryWorksheet();
+            const [studentRows, sheetDiaryRows] = await Promise.all([
+                DatabaseService.getSheetData('Data!A:AF'),
+                DatabaseService.getSheetData(SHEET_RANGE),
+            ]);
+            student = findStudent(studentRows, email);
+            diaryRows = sheetDiaryRows;
+        }
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
 
         return res.json({ success: true, ...buildDiary(diaryRows, student, email) });
@@ -150,7 +163,9 @@ const getStudentDiary = async (req, res) => {
         console.error('Student diary read error:', error.message);
         return res.status(503).json({
             success: false,
-            message: 'Student diary is unavailable. Confirm that the Student_Diary sheet exists with the documented columns.',
+            message: usesMysqlStudentDiary()
+                ? 'Student diary is unavailable. Contact IPCS support.'
+                : 'Student diary is unavailable. Confirm that the Student_Diary sheet exists with the documented columns.',
         });
     }
 };
@@ -166,14 +181,34 @@ const markStudentAttendance = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Capture a valid GPS location before marking attendance.' });
         }
 
-        await ensureDiaryWorksheet();
-        const [studentRows, branchRows, diaryRows, scheduleRows] = await Promise.all([
-            DatabaseService.getSheetData('Data!A:AF'),
-            DatabaseService.getSheetData('Branches!B:E'),
-            DatabaseService.getSheetData(SHEET_RANGE),
-            DatabaseService.getSheetData('Talentino_Schedule!A:D'),
-        ]);
-        const student = findStudent(studentRows, email);
+        let student;
+        let branchRows;
+        let diaryRows;
+        let scheduleRows;
+        if (usesMysqlStudentDiary()) {
+            const [mysqlStudent, archivedBranches, mysqlDiaryRows, archivedSchedule] = await Promise.all([
+                mysqlStudentDiaryService.getStudent(email),
+                mysqlStudentDiaryService.getArchivedTabRows('shared_operations', 'Branches'),
+                mysqlStudentDiaryService.getStudentDiaryRows(email),
+                mysqlStudentDiaryService.getArchivedTabRows('shared_learning', 'Talentino_Schedule'),
+            ]);
+            student = mysqlStudent;
+            branchRows = archivedBranches.map(row => row.slice(1, 5));
+            diaryRows = mysqlDiaryRows;
+            scheduleRows = archivedSchedule.map(row => row.slice(0, 4));
+        } else {
+            await ensureDiaryWorksheet();
+            const [studentRows, sheetBranchRows, sheetDiaryRows, sheetScheduleRows] = await Promise.all([
+                DatabaseService.getSheetData('Data!A:AF'),
+                DatabaseService.getSheetData('Branches!B:E'),
+                DatabaseService.getSheetData(SHEET_RANGE),
+                DatabaseService.getSheetData('Talentino_Schedule!A:D'),
+            ]);
+            student = findStudent(studentRows, email);
+            branchRows = sheetBranchRows;
+            diaryRows = sheetDiaryRows;
+            scheduleRows = sheetScheduleRows;
+        }
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
         if (!student.branch) return res.status(400).json({ success: false, message: 'Your branch is not set on your profile. Contact student support.' });
 
@@ -181,7 +216,7 @@ const markStudentAttendance = async (req, res) => {
         const campusLat = Number(branch?.[2]);
         const campusLng = Number(branch?.[3]);
         if (!Number.isFinite(campusLat) || !Number.isFinite(campusLng)) {
-            return res.status(400).json({ success: false, message: `GPS coordinates for ${student.branch} are not configured in the Branches sheet.` });
+            return res.status(400).json({ success: false, message: `GPS coordinates for ${student.branch} are not configured in the branch directory.` });
         }
 
         const today = getTodayInIndia();
@@ -204,10 +239,24 @@ const markStudentAttendance = async (req, res) => {
 
         const timestamp = getTimestampInIndia();
         const date = formatDateIndia();
-        await DatabaseService.appendRowRaw(SHEET_RANGE, [
-            timestamp, email, student.name, student.rollNo, student.branch, student.course,
-            date, 'ATTENDANCE', 'Present', '', '', '', lat, lng, Math.round(distance),
-        ]);
+        if (usesMysqlStudentDiary()) {
+            try {
+                await mysqlStudentDiaryService.markAttendance({
+                    student, email, timestamp, dateText: date, dateIso: today,
+                    latitude: lat, longitude: lng, distance: Math.round(distance),
+                });
+            } catch (error) {
+                if (error.code === 'DIARY_ATTENDANCE_ALREADY_MARKED') {
+                    return res.status(409).json({ success: false, message: 'Your class attendance is already marked for today.' });
+                }
+                throw error;
+            }
+        } else {
+            await DatabaseService.appendRowRaw(SHEET_RANGE, [
+                timestamp, email, student.name, student.rollNo, student.branch, student.course,
+                date, 'ATTENDANCE', 'Present', '', '', '', lat, lng, Math.round(distance),
+            ]);
+        }
 
         return res.status(201).json({
             success: true,
@@ -218,7 +267,9 @@ const markStudentAttendance = async (req, res) => {
         console.error('Student attendance write error:', error.message);
         return res.status(503).json({
             success: false,
-            message: 'Could not save attendance. Confirm that the Student_Diary sheet exists with the documented columns.',
+            message: usesMysqlStudentDiary()
+                ? 'Could not save attendance. Contact IPCS support.'
+                : 'Could not save attendance. Confirm that the Student_Diary sheet exists with the documented columns.',
         });
     }
 };

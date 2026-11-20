@@ -11,6 +11,10 @@ const MySqlApplicationService = require('../services/mysqlApplicationService');
 const mysqlSupportIssueService = require('../services/mysqlSupportIssueService');
 const mysqlStudentProfileService = require('../services/mysqlStudentProfileService');
 const mysqlStudentDriveService = require('../services/mysqlStudentDriveService');
+const mysqlStudentAttendanceService = require('../services/mysqlStudentAttendanceService');
+const mysqlLearningSourceService = require('../services/mysqlLearningSourceService');
+const mysqlStudentAuthService = require('../services/mysqlStudentAuthService');
+const { isMysqlFeatureEnabled } = require('../services/mysqlFeatureFlags');
 const { formatDateIndia, formatTimeIndia, formatDateTimeIndia, formatDateInputIndia } = require('../utils/portalDateTime');
 
 // Helpers
@@ -93,9 +97,11 @@ const isEventPast = (dateValue, timeValue, now = new Date()) => {
 
 const getCol = (row, idx, fallback = "") => (row && row[idx] !== undefined && row[idx] !== null) ? row[idx].toString().trim() : fallback;
 const normalize = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
-const usesMysqlSupportIssues = () => String(process.env.MYSQL_SUPPORT_ISSUES_ENABLED || '').trim().toLowerCase() === 'true';
-const usesMysqlStudentProfile = () => String(process.env.MYSQL_STUDENT_PROFILE_ENABLED || '').trim().toLowerCase() === 'true';
-const usesMysqlStudentDrives = () => String(process.env.MYSQL_STUDENT_DRIVES_ENABLED || '').trim().toLowerCase() === 'true';
+const usesMysqlSupportIssues = () => isMysqlFeatureEnabled('MYSQL_SUPPORT_ISSUES_ENABLED');
+const usesMysqlStudentProfile = () => isMysqlFeatureEnabled('MYSQL_STUDENT_PROFILE_ENABLED');
+const usesMysqlStudentDrives = () => isMysqlFeatureEnabled('MYSQL_STUDENT_DRIVES_ENABLED');
+const usesMysqlStudentAttendance = () => isMysqlFeatureEnabled('MYSQL_TALENTINO_ATTENDANCE_ENABLED');
+const usesMysqlStudentDashboardReads = () => isMysqlFeatureEnabled('MYSQL_STUDENT_DASHBOARD_READS_ENABLED');
 const normalizeSheetHeader = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 const getNewsletterColumns = (headerRow = []) => {
     const findColumn = (aliases, fallback) => {
@@ -149,7 +155,14 @@ const driveMatchesCourse = (eventRows, row, studentCourseAccess) => {
 };
 const getStudentCourseAccess = async (course) => {
     try {
-        return getCourseAccess(course, await DatabaseService.getSheetData('Courses!A:B'));
+        const mysqlCourseCatalog = usesMysqlStudentDashboardReads()
+            || isMysqlFeatureEnabled('MYSQL_ASSESSMENTS_ENABLED')
+            || isMysqlFeatureEnabled('MYSQL_JOB_APPLICATIONS_ENABLED')
+            || usesMysqlStudentDrives();
+        const rows = mysqlCourseCatalog
+            ? await mysqlLearningSourceService.getArchivedTabRows('shared_learning', 'Courses')
+            : await DatabaseService.getSheetData('Courses!A:B');
+        return getCourseAccess(course, rows);
     } catch (error) {
         // Retain exact-course matching if course-group metadata is temporarily unavailable.
         console.warn('Could not load course groups for drive filtering:', error.message);
@@ -166,6 +179,11 @@ const branchMatches = (assignedBranches, studentBranch) => {
 const findStudent = async (email) => {
     const normalizedEmail = normalize(email);
     if (!normalizedEmail) return null;
+    if (usesMysqlStudentProfile()) {
+        const profile = await mysqlStudentProfileService.getStudentByEmail(normalizedEmail);
+        if (!profile) return null;
+        return { ...profile, phone: profile.phone || 'N/A', vacancyOpen: profile.vacancyOpen || 'No' };
+    }
     const rows = await DatabaseService.getSheetData('Data!A:AG');
     const row = rows.slice(1).reverse().find((item) => normalize(item[3]) === normalizedEmail);
     if (!row) return null;
@@ -183,22 +201,30 @@ const getDashboardData = async (req, res) => {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
 
-        // Fetch all sheets in parallel via our Database Service
+        const mysqlDashboardReads = usesMysqlStudentDashboardReads();
+        const useMysqlJobs = mysqlDashboardReads
+            || isMysqlFeatureEnabled('MYSQL_JOB_APPLICATIONS_ENABLED');
+        const useMysqlStudentIdentity = usesMysqlStudentProfile() || mysqlDashboardReads || useMysqlJobs || usesMysqlStudentDrives();
+        const mysqlJobData = useMysqlJobs ? await MySqlApplicationService.getVacancyData({ email }) : null;
+        const archivedRows = (sourceKey, tabName) => mysqlLearningSourceService.getArchivedTabRows(sourceKey, tabName);
+
+        // Fetch the current source from the configured database path.
         const [userDataRows, appData, evData, driveData, schedData, attData, nlData, contactData] = await Promise.all([
-            usesMysqlStudentProfile() ? Promise.resolve([]) : DatabaseService.getSheetData("Data!A:AG"),
-            DatabaseService.getSheetData("Opening_Applied!A:O"),
-            usesMysqlStudentDrives() ? Promise.resolve([]) : DatabaseService.getSheetData("Event!A:U"),
-            usesMysqlStudentDrives() ? Promise.resolve([]) : DatabaseService.getSheetData("Drive_Registration!A:J"),
-            DatabaseService.getSheetData("Talentino_Schedule!A:D"),
-            DatabaseService.getSheetData("Talentino_Attendance!A:J"),
-            DatabaseService.getSheetData("NewsLetter!A:X", undefined, 60),
-            DatabaseService.getSheetData("Contact!A:H")
+            useMysqlStudentIdentity ? Promise.resolve([]) : DatabaseService.getSheetData("Data!A:AG"),
+            useMysqlJobs ? Promise.resolve([]) : DatabaseService.getSheetData("Opening_Applied!A:O"),
+            usesMysqlStudentDrives() ? Promise.resolve([]) : mysqlDashboardReads ? archivedRows('shared_placement', 'Event') : DatabaseService.getSheetData("Event!A:U"),
+            usesMysqlStudentDrives() ? Promise.resolve([]) : mysqlDashboardReads ? archivedRows('shared_placement', 'Drive_Registration') : DatabaseService.getSheetData("Drive_Registration!A:J"),
+            mysqlDashboardReads || usesMysqlStudentAttendance() ? archivedRows('shared_learning', 'Talentino_Schedule') : DatabaseService.getSheetData("Talentino_Schedule!A:D"),
+            usesMysqlStudentAttendance() ? mysqlStudentAttendanceService.getAttendanceRows()
+                : mysqlDashboardReads ? archivedRows('shared_learning', 'Talentino_Attendance') : DatabaseService.getSheetData("Talentino_Attendance!A:J"),
+            useMysqlJobs ? Promise.resolve([]) : DatabaseService.getSheetData("NewsLetter!A:X", undefined, 60),
+            mysqlDashboardReads ? archivedRows('shared_operations', 'Contact') : DatabaseService.getSheetData("Contact!A:H"),
         ]);
 
-        let userInfo = usesMysqlStudentProfile()
+        let userInfo = useMysqlStudentIdentity
             ? await mysqlStudentProfileService.getStudentByEmail(email) || {}
             : {};
-        if (!usesMysqlStudentProfile()) {
+        if (!useMysqlStudentIdentity) {
             for (let i = userDataRows.length - 1; i >= 1; i--) {
                 if (normalize(userDataRows[i][3]) === email) {
                     userInfo = {
@@ -227,7 +253,15 @@ const getDashboardData = async (req, res) => {
         // Process Applied Jobs
         let appliedJobs = [];
         let stats = { applied: 0, interviews: 0, offers: 0, attended: 0, totalConducted: 0, onLeave: 0 };
-        for (let i = 1; i < appData.length; i++) {
+        if (mysqlJobData) {
+            appliedJobs = mysqlJobData.appliedJobs || [];
+            for (const application of appliedJobs) {
+                stats.applied += 1;
+                const status = String(application.status || 'Applied').toLowerCase();
+                if (status.includes('interview')) stats.interviews += 1;
+                if (status.includes('offer') || status.includes('hired') || status.includes('placed')) stats.offers += 1;
+            }
+        } else for (let i = 1; i < appData.length; i++) {
             if (normalize(appData[i][3]) === email) {
                 let status = appData[i][13] || "Applied";
                 stats.applied++;
@@ -288,10 +322,10 @@ const getDashboardData = async (req, res) => {
         stats.onLeave = Math.max(0, stats.totalConducted - stats.attended);
 
         // Process Job Vacancies
-        let vacancies = [];
+        let vacancies = mysqlJobData?.vacancies || [];
         const newsletterColumns = getNewsletterColumns(nlData[0] || []);
 
-        for (let i = 1; vacancyAccess && i < nlData.length; i++) {
+        for (let i = 1; !mysqlJobData && vacancyAccess && i < nlData.length; i++) {
             const status = normalize(getNewsletterCell(nlData[i], newsletterColumns, 'status', 'yes') || 'yes');
             if (status.includes("no") || status.includes("closed") || status === "false") continue;
             const rowCourse = getNewsletterCell(nlData[i], newsletterColumns, 'course', 'All') || 'All';
@@ -359,9 +393,14 @@ const getDriveAlerts = async (req, res) => {
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
         const student = await findStudent(email);
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
+        const archivedReads = usesMysqlStudentDashboardReads();
         const [eventRows, responseRows] = await Promise.all([
-            DatabaseService.getSheetData('Event!A:U', 10),
-            DatabaseService.getSheetData('Drive_Registration!A:J', 10),
+            archivedReads
+                ? mysqlLearningSourceService.getArchivedTabRows('shared_placement', 'Event')
+                : DatabaseService.getSheetData('Event!A:U', 10),
+            archivedReads
+                ? mysqlLearningSourceService.getArchivedTabRows('shared_placement', 'Drive_Registration')
+                : DatabaseService.getSheetData('Drive_Registration!A:J', 10),
         ]);
         const studentCourseAccess = await getStudentCourseAccess(student.course);
         const drives = [];
@@ -387,7 +426,7 @@ const getDriveAlerts = async (req, res) => {
 };
 
 const getVacancyData = async (req, res) => {
-    if (String(process.env.MYSQL_JOB_APPLICATIONS_ENABLED || '').trim().toLowerCase() === 'true') {
+    if (isMysqlFeatureEnabled('MYSQL_JOB_APPLICATIONS_ENABLED')) {
         try {
             const data = await MySqlApplicationService.getVacancyData({ email: req.user?.email });
             return res.status(200).json({ success: true, ...data, source: 'mysql' });
@@ -526,6 +565,7 @@ const markAttendance = async (req, res) => {
     try {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
+        const mysqlAttendance = usesMysqlStudentAttendance();
         const student = await findStudent(email);
         if (!student) return res.status(404).json({ success: false, message: 'Student profile was not found.' });
         const { rating, feedback, userLat, userLng } = req.body;
@@ -543,7 +583,9 @@ const markAttendance = async (req, res) => {
         const isTimeValid = (currentTimeMins >= (9 * 60 + 30) && currentTimeMins <= (19 * 60));
 
         let isScheduledToday = false;
-        const schedData = await DatabaseService.getSheetData("Talentino_Schedule!A:D");
+        const schedData = mysqlAttendance
+            ? await mysqlLearningSourceService.getArchivedTabRows('shared_learning', 'Talentino_Schedule')
+            : await DatabaseService.getSheetData("Talentino_Schedule!A:D");
         for (let i = 1; i < schedData.length; i++) {
             if (branchMatches(schedData[i][2], student.branch) && isSameDay(schedData[i][0], now)) {
                 isScheduledToday = true; break;
@@ -551,7 +593,9 @@ const markAttendance = async (req, res) => {
         }
 
         let isWithinGeofence = false, calculatedDistance = 999999;
-        const branchesData = await DatabaseService.getSheetData("Branches!B:E");
+        const branchesData = mysqlAttendance
+            ? (await mysqlLearningSourceService.getArchivedTabRows('shared_operations', 'Branches')).map(row => row.slice(1, 5))
+            : await DatabaseService.getSheetData("Branches!B:E");
         let targetCampus = null;
         for (let i = 1; i < branchesData.length; i++) {
             if (normalize(branchesData[i][1]) !== normalize(student.branch)) continue;
@@ -565,7 +609,9 @@ const markAttendance = async (req, res) => {
         isWithinGeofence = calculatedDistance <= 1000;
 
         let alreadyMarked = false;
-        const attData = await DatabaseService.getSheetData("Talentino_Attendance!A:J");
+        const attData = mysqlAttendance
+            ? await mysqlStudentAttendanceService.getAttendanceRows()
+            : await DatabaseService.getSheetData("Talentino_Attendance!A:J");
         for (let i = 1; i < attData.length; i++) {
             if (normalize(attData[i][1]) === email) {
                 if (attData[i][8] === dateOnly || attData[i][0].includes(dateOnly)) { alreadyMarked = true; break; }
@@ -578,7 +624,15 @@ const markAttendance = async (req, res) => {
         if (!isWithinGeofence) return res.status(400).json({ success: false, message: `Must be within 1000m of campus. (You are ${Math.round(calculatedDistance)}m away).` }); 
         const safeRating = Math.min(5, Math.max(1, Math.round(Number(rating) || 0)));
         if (!safeRating) return res.status(400).json({ success: false, message: 'Select a session rating before submitting.' });
-        await DatabaseService.appendRowRaw("Talentino_Attendance!A:J", [timestamp, email, student.name, student.branch, student.course, `${latitude},${longitude}`, `${safeRating} / 5 Stars`, String(feedback || '').slice(0, 1000) || "None", dateOnly, "None"]);
+        if (mysqlAttendance) {
+            await mysqlStudentAttendanceService.saveAttendance({
+                email, latitude, longitude, rating: safeRating, feedback,
+                attendanceDate: dateKeyInIndia(now), attendanceDateRaw: dateOnly,
+                timestamp, requestId: req.portalAuditRequestId,
+            });
+        } else {
+            await DatabaseService.appendRowRaw("Talentino_Attendance!A:J", [timestamp, email, student.name, student.branch, student.course, `${latitude},${longitude}`, `${safeRating} / 5 Stars`, String(feedback || '').slice(0, 1000) || "None", dateOnly, "None"]);
+        }
 
         return res.status(200).json({ success: true, message: "Attendance marked successfully!" });
     } catch (error) { 
@@ -589,7 +643,7 @@ const markAttendance = async (req, res) => {
 
 // 3. APPLY FOR JOB
 const applyForJob = async (req, res) => {
-    if (String(process.env.MYSQL_JOB_APPLICATIONS_ENABLED || '').trim().toLowerCase() === 'true') {
+    if (isMysqlFeatureEnabled('MYSQL_JOB_APPLICATIONS_ENABLED')) {
         try {
             const result = await MySqlApplicationService.applyForOpening({
                 email: req.user?.email,
@@ -837,6 +891,12 @@ const updatePassword = async (req, res) => {
         const email = normalize(req.user?.email);
         if (!email) return res.status(401).json({ success: false, message: 'Please sign in again.' });
         const { currentPassword, newPassword } = req.body;
+        if (isMysqlFeatureEnabled('MYSQL_STUDENT_AUTH_ENABLED')) {
+            await mysqlStudentAuthService.changeStudentPassword({
+                email, currentPassword, newPassword, requestId: req.portalAuditRequestId,
+            });
+            return res.status(200).json({ success: true, message: 'Password updated successfully!' });
+        }
         const { googleSheets, auth } = await connectSheet();
         const spreadsheetId = DatabaseService.getSpreadsheetId('Data!A:AF');
 

@@ -41,7 +41,6 @@ async function main() {
     const members = byTab.get('GamePal_Room_Members');
     const memberKeys = members.map(row => `${normalize(field(row, 'Room Code'))}\u0000${normalize(field(row, 'Student Email'))}`);
     const report = {
-    const report = {
       source: SOURCE,
       requiredTabs: TABS.map(tab => {
         const manifest = manifests.find(row => row.tab_name === tab);

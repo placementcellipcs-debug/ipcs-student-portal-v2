@@ -201,6 +201,7 @@ function previewImport({ branches, studentRows, courseMatrix, vacancyRows, tpoRo
             salary: String(getField(data, 'Salary') ?? '').trim().slice(0, 120) || null,
             applyBy: parseMysqlDate(getField(data, 'Last Date', 'Apply By', 'Application Deadline')),
             status: canonicalVacancyStatus(getField(data, 'Status')),
+            sourceOwner: placementOfficer,
             owner: owners.get(normalized(placementOfficer)) || null,
             fields: data.fields || {},
         });
@@ -210,9 +211,11 @@ function previewImport({ branches, studentRows, courseMatrix, vacancyRows, tpoRo
     let changedMappedVacancyFields = 0;
     let changedRawVacancyMetadata = 0;
     let existingVacanciesWithSourceFields = 0;
+    let existingAssignmentsPreserved = 0;
+    let existingAssignmentsFilledFromUniqueSource = 0;
     const vacancyDifferencesByField = Object.fromEntries([
         'title', 'companyName', 'companyWebsite', 'location', 'description', 'qualification',
-        'employmentType', 'salary', 'applyBy', 'status', 'assignedTpo',
+        'employmentType', 'salary', 'applyBy', 'status',
     ].map(field => [field, 0]));
     let existingVacancyKeys = 0;
     let newVacancyKeys = 0;
@@ -233,8 +236,9 @@ function previewImport({ branches, studentRows, courseMatrix, vacancyRows, tpoRo
             salary: [existing.salary_text || null, vacancy.salary],
             applyBy: [existing.apply_by ? (existing.apply_by instanceof Date ? existing.apply_by.toISOString().slice(0, 10) : String(existing.apply_by).slice(0, 10)) : null, vacancy.applyBy],
             status: [existing.status, vacancy.status],
-            assignedTpo: [existing.assigned_tpo_user_id || null, vacancy.owner],
         };
+        if (existing.assigned_tpo_user_id && existing.assigned_tpo_user_id !== vacancy.owner) existingAssignmentsPreserved += 1;
+        if (!existing.assigned_tpo_user_id && vacancy.owner) existingAssignmentsFilledFromUniqueSource += 1;
         for (const [field, [before, after]] of Object.entries(fieldComparisons)) {
             if (before !== after) vacancyDifferencesByField[field] += 1;
         }
@@ -265,7 +269,10 @@ function previewImport({ branches, studentRows, courseMatrix, vacancyRows, tpoRo
             existingVacanciesWithMappedFieldChanges: changedMappedVacancyFields,
             existingVacanciesWithChangedSourceMetadata: changedRawVacancyMetadata,
             existingVacanciesWithSourceMetadataFields: existingVacanciesWithSourceFields,
+            existingPortalTpoAssignmentsPreserved: existingAssignmentsPreserved,
+            unassignedVacanciesWithUnambiguousSourceTpo: existingAssignmentsFilledFromUniqueSource,
             sourceFieldDifferenceCounts: vacancyDifferencesByField,
+            vacancyRowsWithUnresolvedSourceOwner: [...uniqueVacancies.values()].filter(vacancy => vacancy.sourceOwner && !vacancy.owner).length,
             sourceVacancyKeysAlreadyPresent: existingVacancyKeys,
             extraNonSnapshotVacanciesPreservedByImporter: additionalNonSnapshotVacancies,
             incompleteVacancyRowsSkippedByImporter: incompleteVacancyRows,
@@ -324,7 +331,7 @@ async function insertVacancies(connection, vacancyRows, courseRows, tpoRows) {
                 title = VALUES(title), company_name = VALUES(company_name), company_website = VALUES(company_website),
                 location = VALUES(location), description = VALUES(description), qualification = VALUES(qualification),
                 employment_type = VALUES(employment_type), salary_text = VALUES(salary_text), apply_by = VALUES(apply_by),
-                status = VALUES(status), assigned_tpo_user_id = VALUES(assigned_tpo_user_id),
+                status = VALUES(status), assigned_tpo_user_id = COALESCE(assigned_tpo_user_id, VALUES(assigned_tpo_user_id)),
                 source_record_key = VALUES(source_record_key), metadata = VALUES(metadata)`,
             [
                 id,

@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const path = require('path');
+const { guardGoogleSheetsClient } = require('../services/mysqlSheetWriteGuard');
 
 let connectionPromise;
 
@@ -17,7 +18,7 @@ const connectSheet = async () => {
                 });
 
                 const client = await auth.getClient();
-                const googleSheets = google.sheets({ version: 'v4', auth: client });
+                const googleSheets = guardGoogleSheetsClient(google.sheets({ version: 'v4', auth: client }));
 
                 console.log("Successfully authenticated with Google Cloud Platform.");
                 return { auth, googleSheets };
